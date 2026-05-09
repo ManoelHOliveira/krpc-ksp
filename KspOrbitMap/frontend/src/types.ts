@@ -2,6 +2,8 @@ export interface OrbitData {
   semi_major_axis: number;
   eccentricity: number;
   argument_of_periapsis: number;
+  inclination: number;
+  longitude_of_ascending_node: number;
   true_anomaly: number;
   epoch: number;
   period: number;
@@ -26,6 +28,8 @@ export interface PostOrbitData {
   semi_major_axis: number;
   eccentricity: number;
   argument_of_periapsis: number;
+  inclination: number;
+  longitude_of_ascending_node: number;
   periapsis_altitude: number;
   apoapsis_altitude: number;
   periapsis: number;
@@ -48,6 +52,8 @@ export interface TargetData {
     semi_major_axis: number;
     eccentricity: number;
     argument_of_periapsis: number;
+    inclination: number;
+    longitude_of_ascending_node: number;
   };
 }
 
@@ -55,6 +61,7 @@ export interface SoiBodyData {
   name: string;
   pos_x: number;
   pos_y: number;
+  pos_z: number;
   soi_radius: number;
   encounter: boolean;
   close_approach: number;

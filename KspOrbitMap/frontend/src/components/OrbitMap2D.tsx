@@ -25,7 +25,13 @@ const OrbitMap2D = ({ data }: Props) => {
 
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
-    const scale = 0.00015;
+
+    // Calculate dynamic scale
+    const maxDist = Math.max(
+        data.orbit.semi_major_axis * (1 + data.orbit.eccentricity),
+        data.maneuver?.post_orbit ? data.maneuver.post_orbit.semi_major_axis * (1 + data.maneuver.post_orbit.eccentricity) : 0
+    );
+    const scale = (Math.min(cx, cy) * 0.8) / Math.max(maxDist, 1000000); 
 
     const drawOrbit = (orbit: any, color: string, width: number) => {
         ctx.strokeStyle = color;

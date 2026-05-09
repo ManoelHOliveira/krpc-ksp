@@ -54,13 +54,13 @@ export default function ManeuverBar({ data, send }: Props) {
         <div style={sepVStyle} />
 
         {/* Step buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <span style={{ color: "#888", fontSize: 9, marginRight: 3 }}>STEP</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <span style={{ color: "#888", fontSize: 8, marginRight: 2 }}>STEP</span>
           {STEPS.map(v => (
             <button key={v} onClick={() => setInc(v)}
               style={{
-                height: 22, minWidth: 34, borderRadius: 2, cursor: "pointer",
-                fontSize: 10, fontWeight: 600, textAlign: "center",
+                height: 20, minWidth: 30, borderRadius: 2, cursor: "pointer",
+                fontSize: 9, fontWeight: 600, textAlign: "center", padding: "0 2px",
                 background: v === inc ? "rgba(68,136,255,0.3)" : "rgba(255,255,255,0.04)",
                 color: v === inc ? "#88bbff" : "#888",
                 border: v === inc ? "1px solid rgba(68,136,255,0.5)" : "1px solid rgba(255,255,255,0.06)",
@@ -71,8 +71,8 @@ export default function ManeuverBar({ data, send }: Props) {
         <div style={sepVStyle} />
 
         {/* T+ time */}
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <span style={{ color: "#888", fontSize: 8 }}>T+</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <span style={{ color: "#888", fontSize: 7 }}>T+</span>
           <input type="number" step={1} value={time}
             onChange={e => { const v = parseFloat(e.target.value) || 0; setTime(v); send({ type: "set_node_time", time: v }); }}
             style={inputStyle} />
@@ -130,8 +130,8 @@ function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
   inc: number; sendM: (k: string, v: number) => void; keyName: string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-      <span style={{ color, fontWeight: 700, fontSize: 10, width: 28, letterSpacing: 1 }}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <span style={{ color, fontWeight: 700, fontSize: 9, width: 24, letterSpacing: 1 }}>{label}</span>
       <button style={vmBtn}
         onClick={() => { const v = val - inc; set(v); sendM(keyName, v); }}>-</button>
       <input type="number" step={0.01} value={val}
@@ -139,7 +139,7 @@ function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
         style={nudStyle} />
       <button style={vpBtn}
         onClick={() => { const v = val + inc; set(v); sendM(keyName, v); }}>+</button>
-      <span style={{ color, fontWeight: 600, fontSize: 11, width: 52, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ color, fontWeight: 600, fontSize: 10, width: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
         {val >= 0 ? "+" : ""}{val.toFixed(1)}
       </span>
     </div>
@@ -150,11 +150,12 @@ function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
 
 const barOuter: React.CSSProperties = {
   background: "#0e0e1a", borderTop: "1px solid rgba(255,255,255,0.06)",
-  padding: "5px 10px", flexShrink: 0,
+  padding: "4px 6px", flexShrink: 0,
 };
 
 const rowStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 6, height: 28,
+  display: "flex", alignItems: "center", gap: 4, minHeight: 22,
+  flexWrap: "wrap", marginBottom: 2,
 };
 
 const sepStyle: React.CSSProperties = {
@@ -166,56 +167,56 @@ const sepVStyle: React.CSSProperties = {
 };
 
 const nudStyle: React.CSSProperties = {
-  width: 58, height: 22, background: "rgba(255,255,255,0.04)", color: "#ddd",
+  width: 46, height: 20, background: "rgba(255,255,255,0.04)", color: "#ddd",
   border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2,
-  textAlign: "right", fontSize: 10, padding: "0 3px", outline: "none",
+  textAlign: "right", fontSize: 9, padding: "0 2px", outline: "none",
 };
 
 const inputStyle: React.CSSProperties = {
-  width: 62, height: 22, background: "rgba(255,255,255,0.04)", color: "#ddd",
+  width: 52, height: 20, background: "rgba(255,255,255,0.04)", color: "#ddd",
   border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2,
-  textAlign: "right", fontSize: 10, padding: "0 3px", outline: "none",
-};
-
-const vmBtn: React.CSSProperties = {
-  width: 22, height: 22, background: "rgba(255,80,80,0.12)", color: "#f88",
-  border: "1px solid rgba(255,80,80,0.15)", borderRadius: 2,
-  cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center",
-  justifyContent: "center",
-};
-
-const vpBtn: React.CSSProperties = {
-  width: 22, height: 22, background: "rgba(80,255,80,0.1)", color: "#8f8",
-  border: "1px solid rgba(80,255,80,0.15)", borderRadius: 2,
-  cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center",
-  justifyContent: "center",
+  textAlign: "right", fontSize: 9, padding: "0 2px", outline: "none",
 };
 
 const tmBtn: React.CSSProperties = {
   height: 20, background: "rgba(255,255,255,0.04)", color: "#999",
   border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2,
-  cursor: "pointer", fontSize: 9, padding: "0 5px",
+  cursor: "pointer", fontSize: 8, padding: "0 3px",
 };
 
 const tpBtn: React.CSSProperties = {
   height: 20, background: "rgba(255,255,255,0.04)", color: "#999",
   border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2,
-  cursor: "pointer", fontSize: 9, padding: "0 5px",
+  cursor: "pointer", fontSize: 8, padding: "0 3px",
+};
+
+const vmBtn: React.CSSProperties = {
+  width: 18, height: 20, background: "rgba(255,80,80,0.12)", color: "#f88",
+  border: "1px solid rgba(255,80,80,0.15)", borderRadius: 2,
+  cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center",
+  justifyContent: "center", padding: 0, lineHeight: 1,
+};
+
+const vpBtn: React.CSSProperties = {
+  width: 18, height: 20, background: "rgba(80,255,80,0.1)", color: "#8f8",
+  border: "1px solid rgba(80,255,80,0.15)", borderRadius: 2,
+  cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center",
+  justifyContent: "center", padding: 0, lineHeight: 1,
 };
 
 const infoStyle: React.CSSProperties = {
-  fontSize: 10, color: "#aaa", fontVariantNumeric: "tabular-nums",
+  fontSize: 9, color: "#aaa", fontVariantNumeric: "tabular-nums",
   whiteSpace: "nowrap",
 };
 
 const infoLabel: React.CSSProperties = {
-  color: "#666", fontWeight: 600, marginRight: 3,
+  color: "#666", fontWeight: 600, marginRight: 2,
 };
 
 const actBtn = (bg: string): React.CSSProperties => ({
-  height: 22, padding: "0 10px", background: bg, color: "#fff",
-  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3,
-  cursor: "pointer", fontWeight: 600, fontSize: 10,
+  height: 20, padding: "0 7px", background: bg, color: "#fff",
+  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2,
+  cursor: "pointer", fontWeight: 600, fontSize: 9,
   display: "inline-flex", alignItems: "center",
 });
 

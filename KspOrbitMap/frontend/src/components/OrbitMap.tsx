@@ -77,10 +77,9 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
 
     drawRef.current = draw;
 
-    const peritoScreen = (r: number, th: number, w: number) => {
-      const x = r * Math.cos(th), y = r * Math.sin(th);
-      const cw = Math.cos(w), sw = Math.sin(w);
-      return { x: cx + (x * cw - y * sw) * pxScale, y: cy - (x * sw + y * cw) * pxScale };
+    const peritoScreen = (r: number, th: number, w: number, inc: number, lan: number) => {
+      const { x, y } = perifocalToRef(r, th, w, inc, lan);
+      return { x: cx + x * pxScale, y: cy - y * pxScale };
     };
 
     // ─── RPM radar grid ───────────────────────────────────────────
@@ -159,14 +158,14 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
 
     // ─── Target orbit ───────────────────────────────────────────
     if (target) {
-      const tp = makeOrbit(target.orbit.semi_major_axis, target.orbit.eccentricity, target.orbit.argument_of_periapsis, 128, pxScale, cx, cy);
+      const tp = makeOrbit(target.orbit.semi_major_axis, target.orbit.eccentricity, target.orbit.argument_of_periapsis, target.orbit.inclination, target.orbit.longitude_of_ascending_node, 128, pxScale, cx, cy);
       ctx.strokeStyle = "rgba(255,221,68,0.7)";
       ctx.lineWidth = 1.5;
       drawOrbit(ctx, tp);
     }
 
     // ─── Current orbit (green) ──────────────────────────────────
-    const pts = makeOrbit(orbit.semi_major_axis, orbit.eccentricity, orbit.argument_of_periapsis, 128, pxScale, cx, cy);
+    const pts = makeOrbit(orbit.semi_major_axis, orbit.eccentricity, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node, 128, pxScale, cx, cy);
     ctx.strokeStyle = ORBIT_COLOR;
     ctx.lineWidth = 1.5;
     drawOrbit(ctx, pts);
@@ -176,14 +175,14 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     let postApPos = { x: 0, y: 0 };
     if (maneuver?.post_orbit) {
       const po = maneuver.post_orbit;
-      const postPts = makeOrbit(po.semi_major_axis, po.eccentricity, po.argument_of_periapsis, 128, pxScale, cx, cy);
+      const postPts = makeOrbit(po.semi_major_axis, po.eccentricity, po.argument_of_periapsis, po.inclination, po.longitude_of_ascending_node, 128, pxScale, cx, cy);
       ctx.strokeStyle = POST_COLOR;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([5, 4]);
       drawOrbit(ctx, postPts);
       ctx.setLineDash([]);
-      postPePos = peritoScreen(po.periapsis, 0, po.argument_of_periapsis);
-      postApPos = peritoScreen(po.apoapsis, Math.PI, po.argument_of_periapsis);
+      postPePos = peritoScreen(po.periapsis, 0, po.argument_of_periapsis, po.inclination, po.longitude_of_ascending_node);
+      postApPos = peritoScreen(po.apoapsis, Math.PI, po.argument_of_periapsis, po.inclination, po.longitude_of_ascending_node);
     }
 
     // ─── Planet (transparent + white ring) ──────────────────────
@@ -207,7 +206,7 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
 
     // ─── Vessel ─────────────────────────────────────────────────
     const curR = orbit.semi_major_axis * (1 - orbit.eccentricity * orbit.eccentricity) / (1 + orbit.eccentricity * Math.cos(orbit.true_anomaly));
-    const vp = peritoScreen(curR, orbit.true_anomaly, orbit.argument_of_periapsis);
+    const vp = peritoScreen(curR, orbit.true_anomaly, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
     ctx.fillStyle = "#44ffaa";
     ctx.beginPath();
     ctx.moveTo(vp.x, vp.y - 8);
@@ -219,8 +218,8 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     ctx.stroke();
 
     // ─── Pe / Ap ────────────────────────────────────────────────
-    const pep = peritoScreen(orbit.periapsis, 0, orbit.argument_of_periapsis);
-    const app = peritoScreen(orbit.apoapsis, Math.PI, orbit.argument_of_periapsis);
+    const pep = peritoScreen(orbit.periapsis, 0, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
+    const app = peritoScreen(orbit.apoapsis, Math.PI, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
     ctx.fillStyle = ORBIT_COLOR;
     ctx.font = "bold 8px 'Segoe UI', sans-serif";
     ctx.textAlign = "left";
@@ -257,7 +256,7 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     if (maneuver) {
       const nuN = nodeTrueAnomaly(maneuver.ut, orbit);
       const rN = orbit.semi_major_axis * (1 - orbit.eccentricity * orbit.eccentricity) / (1 + orbit.eccentricity * Math.cos(nuN));
-      const np = peritoScreen(rN, nuN, orbit.argument_of_periapsis);
+      const np = peritoScreen(rN, nuN, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
       nodePos.current = np;
       const timeToNode = maneuver.ut - orbit.epoch;
 
@@ -299,21 +298,26 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
   useEffect(() => { draw(); }, [draw]);
 
   // ─── Mouse wheel: zoom-to-cursor ─────────────────────────────────
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const old = zoom;
-    const f = e.deltaY < 0 ? 1.15 : 0.87;
-    const z = Math.max(0.05, Math.min(100, zoom * f));
-    const cxc = canvas.width / 2 + pan.x;
-    const cyc = canvas.height / 2 + pan.y;
-    const dx = mx - cxc;
-    const dy = my - cyc;
-    setPan(p => ({ x: p.x - dx * (1 - z / old), y: p.y - dy * (1 - z / old) }));
-    setZoom(z);
+  // Use non-passive listener so preventDefault() works
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const f = e.deltaY < 0 ? 1.15 : 0.87;
+      const newZoom = Math.max(0.05, Math.min(100, zoom * f));
+      const cxc = canvas.width / 2 + pan.x;
+      const cyc = canvas.height / 2 + pan.y;
+      const dx = mx - cxc;
+      const dy = my - cyc;
+      setPan(p => ({ x: p.x - dx * (1 - newZoom / zoom), y: p.y - dy * (1 - newZoom / zoom) }));
+      setZoom(newZoom);
+    };
+    canvas.addEventListener("wheel", handler, { passive: false });
+    return () => canvas.removeEventListener("wheel", handler);
   }, [zoom, pan]);
 
   // ─── Mouse: left drag pan / left drag node ─────────────────────
@@ -386,8 +390,7 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
   return (
     <canvas
       ref={canvasRef}
-      style={{ display: "block", width: "100%", height: "100%", cursor: "default" }}
-      onWheel={handleWheel}
+      style={{ display: "block", width: "100%", height: "100%", cursor: "default", touchAction: "none" }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -402,17 +405,34 @@ export default OrbitMap;
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-function makeOrbit(a: number, e: number, w: number, n: number, pxScale: number, cx: number, cy: number): { x: number; y: number }[] {
+function makeOrbit(a: number, e: number, w: number, inc: number, lan: number, n: number, pxScale: number, cx: number, cy: number): { x: number; y: number }[] {
   const pts: { x: number; y: number }[] = [];
   for (let i = 0; i < n; i++) {
     const th = 2 * Math.PI * i / n;
     const r = a * (1 - e * e) / (1 + e * Math.cos(th));
     if (r < 0) { pts.push({ x: -1, y: -1 }); continue; }
-    const x = r * Math.cos(th), y = r * Math.sin(th);
-    const cw = Math.cos(w), sw = Math.sin(w);
-    pts.push({ x: cx + (x * cw - y * sw) * pxScale, y: cy - (x * sw + y * cw) * pxScale });
+    const { x, y } = perifocalToRef(r, th, w, inc, lan);
+    pts.push({ x: cx + x * pxScale, y: cy - y * pxScale });
   }
   return pts;
+}
+
+// Perifocal → reference frame: R_z(-lan) * R_x(-i) * R_z(-w) * (xp, yp, 0)
+function perifocalToRef(r: number, th: number, w: number, inc: number, lan: number): { x: number; y: number } {
+  const xp = r * Math.cos(th), yp = r * Math.sin(th);
+  const cw = Math.cos(w), sw = Math.sin(w);
+  const ci = Math.cos(inc), si = Math.sin(inc);
+  const cl = Math.cos(lan), sl = Math.sin(lan);
+  // R_z(-w)
+  const x1 = xp * cw + yp * sw;
+  const y1 = -xp * sw + yp * cw;
+  // R_x(-i) — z component is 0
+  const x2 = x1;
+  const y2 = y1 * ci;
+  // R_z(-lan) — project onto equatorial XY
+  const x = x2 * cl + y2 * sl;
+  const y = -x2 * sl + y2 * cl;
+  return { x, y };
 }
 
 function drawOrbit(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]) {

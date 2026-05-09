@@ -13,13 +13,18 @@ export function useKspConnection() {
   }, []);
 
   useEffect(() => {
+    let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
     function connect() {
-      const ws = new WebSocket("ws://127.0.0.1:8765");
+      // Prevent multiple concurrent connections
+      if (ws) ws.close();
+
+      ws = new WebSocket("ws://127.0.0.1:8765");
       wsRef.current = ws;
 
       ws.onopen = () => {
+        console.log("Connected to KSP server");
         send({ type: "get_body_names" });
       };
 
@@ -35,20 +40,23 @@ export function useKspConnection() {
       };
 
       ws.onclose = () => {
-        wsRef.current = null;
-        setData({ connected: false });
+        console.warn("Connection closed, retrying in 2s...");
+        setData(prev => ({ ...prev, connected: false }));
         reconnectTimer = setTimeout(connect, 2000);
       };
 
-      ws.onerror = () => ws.close();
+      ws.onerror = (err) => {
+        console.error("WebSocket error:", err);
+        ws?.close();
+      };
     }
 
     connect();
     return () => {
       clearTimeout(reconnectTimer);
-      wsRef.current?.close();
+      if (ws) ws.close();
     };
-  }, []);
+  }, [send]);
 
   return { data, bodyNames, send };
 }

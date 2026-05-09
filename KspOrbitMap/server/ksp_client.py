@@ -82,6 +82,8 @@ class KspClient:
                     "semi_major_axis": a,
                     "eccentricity": e,
                     "argument_of_periapsis": w,
+                    "inclination": orbit.inclination,
+                    "longitude_of_ascending_node": orbit.longitude_of_ascending_node,
                     "true_anomaly": nu,
                     "epoch": orbit.epoch,
                     "period": orbit.period,
@@ -113,6 +115,8 @@ class KspClient:
                     "semi_major_axis": to.semi_major_axis,
                     "eccentricity": to.eccentricity,
                     "argument_of_periapsis": to.argument_of_periapsis,
+                    "inclination": to.inclination,
+                    "longitude_of_ascending_node": to.longitude_of_ascending_node,
                 }
             }
         except:
@@ -128,6 +132,8 @@ class KspClient:
                     "semi_major_axis": po.semi_major_axis,
                     "eccentricity": po.eccentricity,
                     "argument_of_periapsis": po.argument_of_periapsis,
+                    "inclination": po.inclination,
+                    "longitude_of_ascending_node": po.longitude_of_ascending_node,
                     "periapsis_altitude": po.periapsis_altitude,
                     "apoapsis_altitude": po.apoapsis_altitude,
                     "periapsis": po.periapsis,
@@ -187,6 +193,8 @@ class KspClient:
                         ca = check_orbit.semi_major_axis
                         ce = check_orbit.eccentricity
                         cw = check_orbit.argument_of_periapsis
+                        ci = check_orbit.inclination
+                        clan = check_orbit.longitude_of_ascending_node
                         for i in range(n):
                             th = 2 * math.pi * i / n
                             r = ca * (1 - ce * ce) / (1 + ce * math.cos(th))
@@ -194,11 +202,20 @@ class KspClient:
                             ox = r * math.cos(th)
                             oy = r * math.sin(th)
                             wc, ws = math.cos(cw), math.sin(cw)
-                            wx = ox * wc - oy * ws
-                            wy = ox * ws + oy * wc
-                            dx = wx - bx
-                            dy = wy - by
-                            dist = math.sqrt(dx * dx + dy * dy)
+                            wx = ox * wc + oy * ws
+                            wy = -ox * ws + oy * wc
+                            ic, ins = math.cos(ci), math.sin(ci)
+                            ix = wx
+                            iy = wy * ic
+                            iz = wy * ins
+                            lc, ls = math.cos(clan), math.sin(clan)
+                            px = ix * lc + iy * ls
+                            py = -ix * ls + iy * lc
+                            pz = iz
+                            dx = px - bx
+                            dy = py - by
+                            dz = pz - bz
+                            dist = math.sqrt(dx * dx + dy * dy + dz * dz)
                             close_dist = min(close_dist, dist)
                             if dist < soi: encounter = True
 
@@ -206,6 +223,7 @@ class KspClient:
                         "name": name,
                         "pos_x": bx,
                         "pos_y": by,
+                        "pos_z": bz,
                         "soi_radius": soi,
                         "encounter": encounter and self.maneuver_node is not None,
                         "close_approach": close_dist,
@@ -233,14 +251,20 @@ class KspClient:
                     ca = check_orbit.semi_major_axis
                     ce = check_orbit.eccentricity
                     cw = check_orbit.argument_of_periapsis
+                    ci = check_orbit.inclination
+                    clan = check_orbit.longitude_of_ascending_node
                     for i in range(96):
                         th = 2 * math.pi * i / 96
                         r = ca * (1 - ce * ce) / (1 + ce * math.cos(th))
                         if r < 0: continue
                         ox = r * math.cos(th); oy = r * math.sin(th)
                         wc, ws = math.cos(cw), math.sin(cw)
-                        wx = ox * wc - oy * ws; wy = ox * ws + oy * wc
-                        dx = wx - pos[0]; dy = wy - pos[1]
+                        wx = ox * wc + oy * ws; wy = -ox * ws + oy * wc
+                        ic, ins = math.cos(ci), math.sin(ci)
+                        ix = wx; iy = wy * ic
+                        lc, ls = math.cos(clan), math.sin(clan)
+                        px = ix * lc + iy * ls; py = -ix * ls + iy * lc
+                        dx = px - pos[0]; dy = py - pos[1]
                         if math.sqrt(dx*dx + dy*dy) < soi:
                             close = self._closest_approach(check_orbit, pos)
                             return f"\u2192 {name} (CA: {self._fmt_dist(close)})"
@@ -250,15 +274,20 @@ class KspClient:
 
     def _closest_approach(self, orbit, target_pos):
         ca = orbit.semi_major_axis; ce = orbit.eccentricity; cw = orbit.argument_of_periapsis
+        ci = orbit.inclination; clan = orbit.longitude_of_ascending_node
         best = float("inf")
         for i in range(128):
             th = 2 * math.pi * i / 128
             r = ca * (1 - ce * ce) / (1 + ce * math.cos(th))
             if r < 0: continue
+            ox = r * math.cos(th); oy = r * math.sin(th)
             wc, ws = math.cos(cw), math.sin(cw)
-            wx = r*math.cos(th)*wc - r*math.sin(th)*ws
-            wy = r*math.cos(th)*ws + r*math.sin(th)*wc
-            d = math.sqrt((wx-target_pos[0])**2 + (wy-target_pos[1])**2)
+            wx = ox * wc + oy * ws; wy = -ox * ws + oy * wc
+            ic, ins = math.cos(ci), math.sin(ci)
+            ix = wx; iy = wy * ic
+            lc, ls = math.cos(clan), math.sin(clan)
+            px = ix * lc + iy * ls; py = -ix * ls + iy * lc
+            d = math.sqrt((px - target_pos[0])**2 + (py - target_pos[1])**2)
             best = min(best, d)
         return best
 
