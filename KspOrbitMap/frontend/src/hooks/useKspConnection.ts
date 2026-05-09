@@ -24,7 +24,7 @@ export function useKspConnection() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("Connected to KSP server");
+        console.log("Connected to KSP bridge server at ws://127.0.0.1:8765");
         send({ type: "get_body_names" });
       };
 
@@ -36,11 +36,13 @@ export function useKspConnection() {
             return;
           }
           setData(msg as ServerData);
-        } catch { }
+        } catch (err) {
+          console.error("Failed to parse message from server:", err);
+        }
       };
 
-      ws.onclose = () => {
-        console.warn("Connection closed, retrying in 2s...");
+      ws.onclose = (ev) => {
+        console.warn(`Connection closed (code: ${ev.code}, reason: ${ev.reason}), retrying in 2s...`);
         setData(prev => ({ ...prev, connected: false }));
         reconnectTimer = setTimeout(connect, 2000);
       };

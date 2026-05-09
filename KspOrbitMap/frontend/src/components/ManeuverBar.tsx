@@ -32,6 +32,7 @@ export default function ManeuverBar({ data, send }: Props) {
 
   return (
     <div style={barOuter}>
+      <style>{styleTag}</style>
       {/* Row 1: vector controls + step */}
       <div style={rowStyle}>
 
@@ -129,16 +130,24 @@ function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
   label: string; color: string; val: number; set: (v: number) => void;
   inc: number; sendM: (k: string, v: number) => void; keyName: string;
 }) {
+  const [localVal, setLocalVal] = useState(val.toString());
+  
+  useEffect(() => { setLocalVal(val.toFixed(1)); }, [val]);
+
+  const commit = (v: number) => { set(v); sendM(keyName, v); };
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
       <span style={{ color, fontWeight: 700, fontSize: 9, width: 24, letterSpacing: 1 }}>{label}</span>
       <button style={vmBtn}
-        onClick={() => { const v = val - inc; set(v); sendM(keyName, v); }}>-</button>
-      <input type="number" step={0.01} value={val}
-        onChange={e => { const v = parseFloat(e.target.value) || 0; set(v); sendM(keyName, v); }}
+        onClick={() => commit(val - inc)}>-</button>
+      <input type="number" step={0.01} value={localVal}
+        onChange={e => setLocalVal(e.target.value)}
+        onBlur={e => commit(parseFloat(e.target.value) || 0)}
+        onKeyDown={e => { if (e.key === "Enter") commit(parseFloat(localVal) || 0); }}
         style={nudStyle} />
       <button style={vpBtn}
-        onClick={() => { const v = val + inc; set(v); sendM(keyName, v); }}>+</button>
+        onClick={() => commit(val + inc)}>+</button>
       <span style={{ color, fontWeight: 600, fontSize: 10, width: 40, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
         {val >= 0 ? "+" : ""}{val.toFixed(1)}
       </span>
@@ -170,7 +179,18 @@ const nudStyle: React.CSSProperties = {
   width: 46, height: 20, background: "rgba(255,255,255,0.04)", color: "#ddd",
   border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2,
   textAlign: "right", fontSize: 9, padding: "0 2px", outline: "none",
+  // Hide spinners
+  appearance: "textfield",
 };
+
+// Add to ManeuverBar.tsx to inject this into style tag for input[type=number]
+const styleTag = `
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+`;
 
 const inputStyle: React.CSSProperties = {
   width: 52, height: 20, background: "rgba(255,255,255,0.04)", color: "#ddd",

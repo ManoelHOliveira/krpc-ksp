@@ -18,15 +18,25 @@ class KspClient:
         try:
             self.conn = krpc.connect(name="KspOrbitMap", address="127.0.0.1", rpc_port=50000, stream_port=50001)
             self.sc = self.conn.space_center
-            self.vessel = self.sc.active_vessel
-            self.flight = self.vessel.flight(self.vessel.orbit.body.reference_frame)
-            self.flight_surface = self.vessel.flight(self.vessel.surface_reference_frame)
+            self._update_vessel()
             self._bodies_cache = self.sc.bodies
             self._body_names = sorted(self._bodies_cache.keys())
             return True
         except Exception:
             self.conn = None
             return False
+
+    def _update_vessel(self):
+        if not self.conn: return
+        try:
+            current_vessel = self.sc.active_vessel
+            if not self.vessel or self.vessel.id != current_vessel.id:
+                self.vessel = current_vessel
+                self.flight = self.vessel.flight(self.vessel.orbit.body.reference_frame)
+                self.flight_surface = self.vessel.flight(self.vessel.surface_reference_frame)
+                self.maneuver_node = None # Reset tracked node on vessel switch
+        except:
+            pass
 
     def disconnect(self):
         if self.maneuver_node:
@@ -42,7 +52,7 @@ class KspClient:
 
     @property
     def connected(self) -> bool:
-        return self.conn is not None and self.vessel is not None
+        return self.conn is not None
 
     def set_target(self, name: Optional[str]):
         if not self.conn: return
@@ -61,6 +71,10 @@ class KspClient:
             return {"connected": False}
 
         try:
+            self._update_vessel()
+            if not self.vessel:
+                return {"connected": True, "vessel_name": "No Active Vessel"}
+
             orbit = self.vessel.orbit
             a = orbit.semi_major_axis
             e = orbit.eccentricity
@@ -102,7 +116,9 @@ class KspClient:
             }
             return result
         except Exception as ex:
-            return {"connected": False, "error": str(ex)}
+            import traceback
+            traceback.print_exc()
+            return {"connected": True, "error": str(ex)}
 
     def _get_target_data(self) -> Optional[dict]:
         if not self.target_body: return None
@@ -123,8 +139,16 @@ class KspClient:
             return None
 
     def _get_maneuver_data(self) -> Optional[dict]:
-        if not self.maneuver_node: return None
         try:
+            # Sync with existing nodes if none tracked
+            if not self.maneuver_node or not self._is_node_valid(self.maneuver_node):
+                nodes = self.vessel.control.nodes
+                if nodes:
+                    self.maneuver_node = nodes[0]
+                else:
+                    self.maneuver_node = None
+                    return None
+
             po = self.maneuver_node.orbit
             post = None
             if po:
@@ -163,7 +187,16 @@ class KspClient:
                 "post_orbit": post,
             }
         except:
+            self.maneuver_node = None
             return None
+
+    def _is_node_valid(self, node) -> bool:
+        try:
+            _ = node.ut
+            return True
+        except:
+            return False
+
 
     def _compute_soi_bodies(self) -> list[dict]:
         if not self.connected: return []
@@ -237,40 +270,55 @@ class KspClient:
         return bodies
 
     def _compute_encounter_text(self) -> str:
-        if not self.connected or not self.maneuver_node: return ""
+        try:
+            soi_bodies = self._compute_soi_bodies()
+            for sb in soi_bodies:
+                if sb.get("encounter"):
+                    ca = sb.get("close_approach", 0)
+                    return f"→ {sb['name']} (CA: {self._fmt_dist(ca)})"
+        except:
+            pass
+        return ""
+
+    def _compute_encounter_coords(self) -> Optional[tuple[float, float, float]]:
+        if not self.connected or not self.maneuver_node: return None
         current = self.vessel.orbit.body
         try:
             for name, body in self._bodies_cache.items():
                 if name == current.name: continue
-                try:
-                    soi = body.sphere_of_influence
-                    if soi <= 0: continue
-                    pos = body.position(current.reference_frame)
-                    check_orbit = self.maneuver_node.orbit
-                    if check_orbit is None: continue
-                    ca = check_orbit.semi_major_axis
-                    ce = check_orbit.eccentricity
-                    cw = check_orbit.argument_of_periapsis
-                    ci = check_orbit.inclination
-                    clan = check_orbit.longitude_of_ascending_node
-                    for i in range(96):
-                        th = 2 * math.pi * i / 96
-                        r = ca * (1 - ce * ce) / (1 + ce * math.cos(th))
-                        if r < 0: continue
-                        ox = r * math.cos(th); oy = r * math.sin(th)
-                        wc, ws = math.cos(cw), math.sin(cw)
-                        wx = ox * wc + oy * ws; wy = -ox * ws + oy * wc
-                        ic, ins = math.cos(ci), math.sin(ci)
-                        ix = wx; iy = wy * ic
-                        lc, ls = math.cos(clan), math.sin(clan)
-                        px = ix * lc + iy * ls; py = -ix * ls + iy * lc
-                        dx = px - pos[0]; dy = py - pos[1]
-                        if math.sqrt(dx*dx + dy*dy) < soi:
-                            close = self._closest_approach(check_orbit, pos)
-                            return f"\u2192 {name} (CA: {self._fmt_dist(close)})"
-                except: continue
+                pos = body.position(current.reference_frame)
+                check_orbit = self.maneuver_node.orbit
+                if check_orbit is None: continue
+                
+                soi = body.sphere_of_influence
+                ca = check_orbit.semi_major_axis
+                ce = check_orbit.eccentricity
+                cw = check_orbit.argument_of_periapsis
+                ci = check_orbit.inclination
+                clan = check_orbit.longitude_of_ascending_node
+                
+                best_d = float("inf")
+                best_pos = (0.0, 0.0, 0.0)
+                
+                for i in range(128):
+                    th = 2 * math.pi * i / 128
+                    r = ca * (1 - ce * ce) / (1 + ce * math.cos(th))
+                    if r < 0: continue
+                    ox = r * math.cos(th); oy = r * math.sin(th)
+                    wc, ws = math.cos(cw), math.sin(cw)
+                    wx = ox * wc + oy * ws; wy = -ox * ws + oy * wc
+                    ic, ins = math.cos(ci), math.sin(ci)
+                    ix = wx; iy = wy * ic
+                    lc, ls = math.cos(clan), math.sin(clan)
+                    px = ix * lc + iy * ls; py = -ix * ls + iy * lc
+                    d = math.sqrt((px - pos[0])**2 + (py - pos[1])**2)
+                    if d < best_d:
+                        best_d = d
+                        best_pos = (px, py, 0.0)
+                if best_d < soi:
+                    return best_pos
         except: pass
-        return ""
+        return None
 
     def _closest_approach(self, orbit, target_pos):
         ca = orbit.semi_major_axis; ce = orbit.eccentricity; cw = orbit.argument_of_periapsis

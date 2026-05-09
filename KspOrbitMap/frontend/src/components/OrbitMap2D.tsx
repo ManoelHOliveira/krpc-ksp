@@ -26,12 +26,14 @@ const OrbitMap2D = ({ data }: Props) => {
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // Calculate dynamic scale
+    // Calculate dynamic scale to fit vessel and target
+    const targetOrbit = data.target?.orbit;
     const maxDist = Math.max(
         data.orbit.semi_major_axis * (1 + data.orbit.eccentricity),
-        data.maneuver?.post_orbit ? data.maneuver.post_orbit.semi_major_axis * (1 + data.maneuver.post_orbit.eccentricity) : 0
+        targetOrbit ? targetOrbit.semi_major_axis * (1 + targetOrbit.eccentricity) : 0,
+        1000000 // Ensure a minimum zoom level
     );
-    const scale = (Math.min(cx, cy) * 0.8) / Math.max(maxDist, 1000000); 
+    const scale = (Math.min(cx, cy) * 0.7) / maxDist;
 
     const drawOrbit = (orbit: any, color: string, width: number) => {
         ctx.strokeStyle = color;
@@ -52,8 +54,7 @@ const OrbitMap2D = ({ data }: Props) => {
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    const planetRadius = Math.max(data.orbit.body_radius * scale, 10);
-    ctx.arc(cx, cy, planetRadius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, Math.max(data.orbit.body_radius * scale, 10), 0, Math.PI * 2);
     ctx.stroke();
 
     // 2. Draw Vessel Orbit
@@ -64,9 +65,22 @@ const OrbitMap2D = ({ data }: Props) => {
         drawOrbit(data.target.orbit, "#ff0", 1);
     }
 
+    // Draw Ap/Pe Markers
+    const drawApPe = (anomaly: number, label: string) => {
+        const r = (data.orbit.semi_major_axis * (1 - data.orbit.eccentricity ** 2)) / (1 + data.orbit.eccentricity * Math.cos(anomaly));
+        const x = r * Math.cos(anomaly) * scale;
+        const y = r * Math.sin(anomaly) * scale;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(cx + x, cy + y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillText(label, cx + x + 8, cy + y + 8);
+    };
+    drawApPe(0, "Pe");
+    drawApPe(Math.PI, "Ap");
+
     // 4. Draw Maneuver Node and Trajectory
     if (data.maneuver) {
-        // Draw blue trajectory if available
         if (data.maneuver.post_orbit) {
             drawOrbit(data.maneuver.post_orbit, "#00f", 2);
         }
@@ -75,11 +89,23 @@ const OrbitMap2D = ({ data }: Props) => {
         const mr = (data.orbit.semi_major_axis * (1 - data.orbit.eccentricity ** 2)) / (1 + data.orbit.eccentricity * Math.cos(mTh));
         const mx = mr * Math.cos(mTh) * scale;
         const my = mr * Math.sin(mTh) * scale;
+        
         ctx.fillStyle = "#0ff";
         ctx.beginPath();
         ctx.arc(cx + mx, cy + my, 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+
+        // Use encounter_pos if available
+        if (data.encounter_pos) {
+            const [ex, ey] = data.encounter_pos;
+            ctx.fillStyle = "#f0f";
+            ctx.font = "bold 16px Arial";
+            ctx.fillText("ENC", cx + (ex * scale), cy + (ey * scale));
+            ctx.beginPath();
+            ctx.arc(cx + (ex * scale), cy + (ey * scale), 8, 0, Math.PI * 2);
+            ctx.stroke();
+        }
     }
 
     // 5. Draw Vessel

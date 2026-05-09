@@ -5,11 +5,9 @@ interface Props {
   data: ServerData;
   bodyNames: string[];
   send: (msg: object) => void;
-  onFit: () => void;
-  onReset: () => void;
 }
 
-export default function TopBar({ data, bodyNames, send, onFit, onReset }: Props) {
+export default function TopBar({ data, bodyNames, send }: Props) {
   const sorted = useMemo(() => {
     if (!data.soi_bodies || data.soi_bodies.length === 0) return bodyNames;
     const order = data.soi_bodies.map(sb => sb.name);
@@ -36,13 +34,13 @@ export default function TopBar({ data, bodyNames, send, onFit, onReset }: Props)
 
           <select style={selStyle}
             value={data.target?.name || "none"}
-            onChange={e => send({ type: "set_target", name: e.target.value === "none" ? null : e.target.value })}>
+            onChange={e => send({ type: "set_target", target: e.target.value === "none" ? null : e.target.value })}>
             <option value="none" style={optStyle}>-- target --</option>
             {sorted.map(n => <option key={n} value={n} style={optStyle}>{n}</option>)}
           </select>
 
-          <button style={btnStyle} onClick={onFit} title="Ajustar zoom">Fit</button>
-          <button style={btnStyle} onClick={onReset} title="Resetar zoom">Reset</button>
+          <button style={btnStyle} onClick={() => send({ type: "set_target", target: null })}>Clear Tgt</button>
+          <button style={btnStyle} onClick={() => send({ type: "remove_node" })}>Clear Maneuver</button>
         </>
       )}
     </div>

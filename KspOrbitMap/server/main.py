@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import websockets
 from ksp_client import KspClient
 
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +32,9 @@ async def handle_cmd(ws, raw: str):
         cmd = msg.get("type", "")
 
         if cmd == "set_target":
-            ksp.set_target(msg.get("name"))
+            target_name = msg.get("target")
+            ksp.set_target(target_name)
+            logger.info(f"Target set to: {target_name}")
         elif cmd == "add_node":
             ksp.add_node(msg.get("prograde", 0), msg.get("normal", 0), msg.get("radial", 0))
         elif cmd == "add_node_pe":
@@ -93,13 +96,20 @@ async def try_connect_loop():
 
 async def main():
     port = 8765
-    logger.info(f"Starting WebSocket server on ws://127.0.0.1:{port}")
+    # Listen on 0.0.0.0 to allow connections from any interface (useful for some WSL/Docker/Network setups)
+    # and to ensure both 127.0.0.1 and localhost work.
+    logger.info(f"Starting WebSocket server on ws://0.0.0.0:{port}")
 
     asyncio.create_task(try_connect_loop())
 
-    async with websockets.serve(handler, "127.0.0.1", port):
-        await asyncio.Future()
+    try:
+        async with websockets.serve(handler, "0.0.0.0", port):
+            await asyncio.Future()
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
 
 if __name__ == "__main__":
-    import websockets
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
