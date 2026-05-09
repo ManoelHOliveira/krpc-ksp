@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useKspConnection } from "./hooks/useKspConnection";
 import TopBar from "./components/TopBar";
 import OrbitMap, { type OrbitMapHandle } from "./components/OrbitMap";
-import ManeuverPanel from "./components/ManeuverPanel";
+import ManeuverBar from "./components/ManeuverBar";
 import StatusBar from "./components/StatusBar";
 
 export default function App() {
@@ -11,21 +11,13 @@ export default function App() {
 
   return (
     <div style={rootStyle}>
-      <TopBar
-        data={data}
-        bodyNames={bodyNames}
-        send={send}
+      <TopBar data={data} bodyNames={bodyNames} send={send}
         onFit={() => mapRef.current?.autoFit()}
-        onReset={() => mapRef.current?.autoFit()}
-      />
-      <div style={mainStyle}>
-        <div style={mapStyle}>
-          <OrbitMap ref={mapRef} data={data} send={send} />
-        </div>
-        <div style={panelStyle}>
-          <ManeuverPanel data={data} send={send} />
-        </div>
+        onReset={() => mapRef.current?.autoFit()} />
+      <div style={mapStyle}>
+        <OrbitMap ref={mapRef} data={data} send={send} />
       </div>
+      <ManeuverBar data={data} send={send} />
       <StatusBar data={data} />
     </div>
   );
@@ -33,18 +25,9 @@ export default function App() {
 
 const rootStyle: React.CSSProperties = {
   display: "flex", flexDirection: "column", width: "100%", height: "100%",
-  background: "#08081a", color: "#fff",
-};
-
-const mainStyle: React.CSSProperties = {
-  display: "flex", flex: 1, overflow: "hidden",
+  background: "#08081a", color: "#fff", overflow: "hidden",
 };
 
 const mapStyle: React.CSSProperties = {
-  flex: "1 1 0", minWidth: 0, position: "relative", overflow: "hidden",
-};
-
-const panelStyle: React.CSSProperties = {
-  flex: "0 0 280px", overflow: "hidden",
-  borderLeft: "1px solid rgba(255,255,255,0.06)", minWidth: 240,
+  flex: "1 1 0", minHeight: 0, position: "relative", overflow: "hidden",
 };

@@ -160,8 +160,8 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     // ─── Target orbit ───────────────────────────────────────────
     if (target) {
       const tp = makeOrbit(target.orbit.semi_major_axis, target.orbit.eccentricity, target.orbit.argument_of_periapsis, 128, pxScale, cx, cy);
-      ctx.strokeStyle = "rgba(255,221,68,0.4)";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255,221,68,0.7)";
+      ctx.lineWidth = 1.5;
       drawOrbit(ctx, tp);
     }
 

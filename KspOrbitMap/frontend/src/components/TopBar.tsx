@@ -10,7 +10,6 @@ interface Props {
 }
 
 export default function TopBar({ data, bodyNames, send, onFit, onReset }: Props) {
-  // Sort bodyNames by proximity using soi_bodies order
   const sorted = useMemo(() => {
     if (!data.soi_bodies || data.soi_bodies.length === 0) return bodyNames;
     const order = data.soi_bodies.map(sb => sb.name);
@@ -36,14 +35,14 @@ export default function TopBar({ data, bodyNames, send, onFit, onReset }: Props)
           <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.1)", margin: "0 6px" }} />
 
           <select style={selStyle}
-            value={data.target?.name || "(none)"}
-            onChange={e => send({ type: "set_target", name: e.target.value === "(none)" ? null : e.target.value })}>
-            <option value="(none)">\u2014 target \u2014</option>
-            {sorted.map(n => <option key={n} value={n}>{n}</option>)}
+            value={data.target?.name || "none"}
+            onChange={e => send({ type: "set_target", name: e.target.value === "none" ? null : e.target.value })}>
+            <option value="none" style={optStyle}>-- target --</option>
+            {sorted.map(n => <option key={n} value={n} style={optStyle}>{n}</option>)}
           </select>
 
-          <button style={btnStyle} onClick={onFit} title="Auto zoom">\u29D6</button>
-          <button style={btnStyle} onClick={onReset} title="Resetar zoom">\u27F2</button>
+          <button style={btnStyle} onClick={onFit} title="Ajustar zoom">Fit</button>
+          <button style={btnStyle} onClick={onReset} title="Resetar zoom">Reset</button>
         </>
       )}
     </div>
@@ -57,14 +56,18 @@ const barStyle: React.CSSProperties = {
 };
 
 const selStyle: React.CSSProperties = {
-  height: 20, minWidth: 100, background: "rgba(255,255,255,0.04)", color: "#ccc",
-  border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3,
+  height: 20, minWidth: 110, background: "#1a1a2a", color: "#ccc",
+  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3,
   fontSize: 10, padding: "0 4px", outline: "none", cursor: "pointer",
 };
 
+const optStyle: React.CSSProperties = {
+  background: "#1a1a2a", color: "#ddd",
+};
+
 const btnStyle: React.CSSProperties = {
-  height: 20, background: "rgba(255,255,255,0.04)", color: "#aaa",
-  border: "1px solid rgba(255,255,255,0.08)", borderRadius: 3,
-  cursor: "pointer", fontSize: 11, padding: "0 7px",
+  height: 20, background: "rgba(255,255,255,0.05)", color: "#bbb",
+  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3,
+  cursor: "pointer", fontSize: 9, padding: "0 8px",
   display: "flex", alignItems: "center",
 };
