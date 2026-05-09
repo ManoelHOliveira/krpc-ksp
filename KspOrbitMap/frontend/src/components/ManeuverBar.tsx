@@ -55,12 +55,12 @@ export default function ManeuverBar({ data, send }: Props) {
 
         {/* Step buttons */}
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <span style={{ color: "#888", fontSize: 8, marginRight: 2 }}>STEP</span>
+          <span style={{ color: "#888", fontSize: 9, marginRight: 3 }}>STEP</span>
           {STEPS.map(v => (
             <button key={v} onClick={() => setInc(v)}
               style={{
-                height: 18, minWidth: 28, borderRadius: 2, cursor: "pointer",
-                fontSize: 8, fontWeight: 600, textAlign: "center",
+                height: 22, minWidth: 34, borderRadius: 2, cursor: "pointer",
+                fontSize: 10, fontWeight: 600, textAlign: "center",
                 background: v === inc ? "rgba(68,136,255,0.3)" : "rgba(255,255,255,0.04)",
                 color: v === inc ? "#88bbff" : "#888",
                 border: v === inc ? "1px solid rgba(68,136,255,0.5)" : "1px solid rgba(255,255,255,0.06)",
@@ -131,7 +131,7 @@ function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-      <span style={{ color, fontWeight: 700, fontSize: 9, width: 24, letterSpacing: 1 }}>{label}</span>
+      <span style={{ color, fontWeight: 700, fontSize: 10, width: 28, letterSpacing: 1 }}>{label}</span>
       <button style={vmBtn}
         onClick={() => { const v = val - inc; set(v); sendM(keyName, v); }}>-</button>
       <input type="number" step={0.01} value={val}
@@ -139,7 +139,7 @@ function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
         style={nudStyle} />
       <button style={vpBtn}
         onClick={() => { const v = val + inc; set(v); sendM(keyName, v); }}>+</button>
-      <span style={{ color, fontWeight: 600, fontSize: 10, width: 48, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ color, fontWeight: 600, fontSize: 11, width: 52, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
         {val >= 0 ? "+" : ""}{val.toFixed(1)}
       </span>
     </div>
@@ -150,72 +150,72 @@ function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
 
 const barOuter: React.CSSProperties = {
   background: "#0e0e1a", borderTop: "1px solid rgba(255,255,255,0.06)",
-  padding: "3px 8px", flexShrink: 0,
+  padding: "5px 10px", flexShrink: 0,
 };
 
 const rowStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 4, height: 22,
+  display: "flex", alignItems: "center", gap: 6, height: 28,
 };
 
 const sepStyle: React.CSSProperties = {
-  width: 1, height: 14, background: "rgba(255,255,255,0.06)", margin: "0 2px",
+  width: 1, height: 18, background: "rgba(255,255,255,0.06)", margin: "0 4px",
 };
 
 const sepVStyle: React.CSSProperties = {
-  width: 1, height: 14, background: "rgba(255,255,255,0.08)", margin: "0 4px",
+  width: 1, height: 18, background: "rgba(255,255,255,0.08)", margin: "0 6px",
 };
 
 const nudStyle: React.CSSProperties = {
-  width: 48, height: 18, background: "rgba(255,255,255,0.04)", color: "#ddd",
+  width: 58, height: 22, background: "rgba(255,255,255,0.04)", color: "#ddd",
   border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2,
-  textAlign: "right", fontSize: 9, padding: "0 2px", outline: "none",
+  textAlign: "right", fontSize: 10, padding: "0 3px", outline: "none",
 };
 
 const inputStyle: React.CSSProperties = {
-  width: 52, height: 18, background: "rgba(255,255,255,0.04)", color: "#ddd",
+  width: 62, height: 22, background: "rgba(255,255,255,0.04)", color: "#ddd",
   border: "1px solid rgba(255,255,255,0.08)", borderRadius: 2,
-  textAlign: "right", fontSize: 9, padding: "0 2px", outline: "none",
+  textAlign: "right", fontSize: 10, padding: "0 3px", outline: "none",
 };
 
 const vmBtn: React.CSSProperties = {
-  width: 18, height: 18, background: "rgba(255,80,80,0.12)", color: "#f88",
+  width: 22, height: 22, background: "rgba(255,80,80,0.12)", color: "#f88",
   border: "1px solid rgba(255,80,80,0.15)", borderRadius: 2,
-  cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center",
+  cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center",
   justifyContent: "center",
 };
 
 const vpBtn: React.CSSProperties = {
-  width: 18, height: 18, background: "rgba(80,255,80,0.1)", color: "#8f8",
+  width: 22, height: 22, background: "rgba(80,255,80,0.1)", color: "#8f8",
   border: "1px solid rgba(80,255,80,0.15)", borderRadius: 2,
-  cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center",
+  cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center",
   justifyContent: "center",
 };
 
 const tmBtn: React.CSSProperties = {
-  height: 16, background: "rgba(255,255,255,0.04)", color: "#999",
+  height: 20, background: "rgba(255,255,255,0.04)", color: "#999",
   border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2,
-  cursor: "pointer", fontSize: 8, padding: "0 3px",
+  cursor: "pointer", fontSize: 9, padding: "0 5px",
 };
 
 const tpBtn: React.CSSProperties = {
-  height: 16, background: "rgba(255,255,255,0.04)", color: "#999",
+  height: 20, background: "rgba(255,255,255,0.04)", color: "#999",
   border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2,
-  cursor: "pointer", fontSize: 8, padding: "0 3px",
+  cursor: "pointer", fontSize: 9, padding: "0 5px",
 };
 
 const infoStyle: React.CSSProperties = {
-  fontSize: 9, color: "#aaa", fontVariantNumeric: "tabular-nums",
+  fontSize: 10, color: "#aaa", fontVariantNumeric: "tabular-nums",
   whiteSpace: "nowrap",
 };
 
 const infoLabel: React.CSSProperties = {
-  color: "#666", fontWeight: 600, marginRight: 2,
+  color: "#666", fontWeight: 600, marginRight: 3,
 };
 
 const actBtn = (bg: string): React.CSSProperties => ({
-  height: 18, padding: "0 7px", background: bg, color: "#fff",
+  height: 22, padding: "0 10px", background: bg, color: "#fff",
   border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3,
-  cursor: "pointer", fontWeight: 600, fontSize: 8,
+  cursor: "pointer", fontWeight: 600, fontSize: 10,
   display: "inline-flex", alignItems: "center",
 });
 
