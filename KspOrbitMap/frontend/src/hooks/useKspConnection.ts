@@ -1,0 +1,54 @@
+import { useEffect, useRef, useCallback, useState } from "react";
+import type { ServerData, WsMessage } from "../types";
+
+export function useKspConnection() {
+  const [data, setData] = useState<ServerData>({ connected: false });
+  const [bodyNames, setBodyNames] = useState<string[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const send = useCallback((msg: object) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  }, []);
+
+  useEffect(() => {
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    function connect() {
+      const ws = new WebSocket("ws://127.0.0.1:8765");
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        send({ type: "get_body_names" });
+      };
+
+      ws.onmessage = (ev) => {
+        try {
+          const msg: WsMessage = JSON.parse(ev.data);
+          if ("type" in msg && msg.type === "body_names") {
+            setBodyNames(msg.names);
+            return;
+          }
+          setData(msg as ServerData);
+        } catch { }
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        setData({ connected: false });
+        reconnectTimer = setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    connect();
+    return () => {
+      clearTimeout(reconnectTimer);
+      wsRef.current?.close();
+    };
+  }, []);
+
+  return { data, bodyNames, send };
+}
