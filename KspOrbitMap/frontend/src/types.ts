@@ -5,6 +5,7 @@ export interface OrbitData {
   inclination: number;
   longitude_of_ascending_node: number;
   true_anomaly: number;
+  mean_anomaly_at_epoch: number;
   epoch: number;
   period: number;
   periapsis_altitude: number;
@@ -35,6 +36,8 @@ export interface PostOrbitData {
   periapsis: number;
   apoapsis: number;
   body_name?: string;
+  mu?: number;
+  mean_anomaly_at_epoch?: number;
   next_orbit?: PostOrbitData | null;
   transition_ut?: number | null;
 }
@@ -52,13 +55,7 @@ export interface ManeuverData {
 
 export interface TargetData {
   name: string;
-  orbit: {
-    semi_major_axis: number;
-    eccentricity: number;
-    argument_of_periapsis: number;
-    inclination: number;
-    longitude_of_ascending_node: number;
-  };
+  orbit: OrbitData;
 }
 
 export interface SoiBodyData {
@@ -80,6 +77,7 @@ export interface EncounterData {
 export interface ServerData {
   connected: boolean;
   vessel_name?: string;
+  ut?: number;
   vessel?: VesselData | null;
   orbit?: OrbitData | null;
   target?: TargetData | null;

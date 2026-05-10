@@ -29,7 +29,6 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     if (!data.orbit || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const maxDist = Math.max(data.orbit.apoapsis, data.orbit.periapsis);
-    if (maxDist < data.orbit.body_radius * 3) return;
     const drawR = Math.min(canvas.width, canvas.height) * 0.42;
     const z = drawR / maxDist;
     setZoom(Math.max(0.005, Math.min(500, z)));
@@ -49,8 +48,8 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     ctx.fillStyle = "#05080c";
     ctx.fillRect(0, 0, W, H);
 
-    const { orbit, vessel, maneuvers, target, soi_bodies, connected, encounter } = data;
-    if (!connected || !orbit) {
+    const { orbit, maneuvers, target, soi_bodies, connected, encounter, ut } = data;
+    if (!connected || !orbit || ut == null) {
       ctx.fillStyle = "#2a3a4a";
       ctx.font = "bold 14px Orbitron, sans-serif";
       ctx.textAlign = "center";
@@ -75,7 +74,7 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
 
     const toScreen = (vec: { x: number; y: number }, origin = { x: cx, y: cy }) => ({
       x: origin.x + vec.x * pxScale,
-      y: origin.y - vec.y * pxScale
+      y: origin.y - vec.y * pxScale // Invert Y for canvas
     });
 
     // ─── Grid ─────────────────────────────────────────────────────
@@ -84,34 +83,33 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     for (let i = 1; i <= 5; i++) {
       const rr = drawR * (i / 5) * zoom;
       ctx.beginPath(); ctx.ellipse(cx, cy, rr, rr, 0, 0, Math.PI * 2); ctx.stroke();
-      const label = fmtDistShort(maxDist * (i / 5));
+      
+      // FIX: Grid labels show ALTITUDE (dist - body_radius)
+      const dist = maxDist * (i / 5);
+      const alt = dist - bodyR;
+      const label = alt > 0 ? fmtDistShort(alt) : fmtDistShort(dist);
+      
       ctx.fillStyle = "rgba(104,170,170,0.4)";
       ctx.font = "bold 9px 'Share Tech Mono', monospace";
       ctx.textAlign = "center";
       ctx.fillText(label, cx + rr + 4, cy + 3);
     }
-    ctx.strokeStyle = "rgba(68,136,255,0.2)";
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.ellipse(cx, cy, drawR * zoom, drawR * zoom, 0, 0, Math.PI * 2); ctx.stroke();
-// ─── SOI Bodies (Planets) ──────────────────────────────────────
-if (soi_bodies) for (const sb of soi_bodies) {
-  const isTarget = target && sb.name === target.name;
-  const isEncounter = encounter && encounter.body_name === sb.name;
-  if (!isTarget && !isEncounter) continue;
 
-  // FIX: Use orbital parameters for positioning to match the orbit lines exactly
-  let sp;
-  if (sb.orbit) {
-    const bodyVec3 = getPosAtTrueAnomaly(sb.orbit, sb.orbit.true_anomaly);
-    sp = toScreen({ x: bodyVec3.x, y: bodyVec3.y });
-  } else {
-    // Fallback to raw pos if no orbit data
-    sp = toScreen({ x: sb.pos_x, y: sb.pos_y });
-  }
+    // ─── SOI Bodies (Planets) ──────────────────────────────────────
+    if (soi_bodies) for (const sb of soi_bodies) {
+      const isTarget = target && sb.name === target.name;
+      const isEncounter = encounter && encounter.body_name === sb.name;
+      if (!isTarget && !isEncounter) continue;
 
-  const sr = sb.soi_radius * pxScale;
-
-
+      let sp;
+      if (sb.orbit) {
+        const bodyPos = getPosAtUt(sb.orbit, ut);
+        sp = toScreen(bodyPos);
+      } else {
+        sp = toScreen({ x: sb.pos_x, y: sb.pos_z }); // KSP X-Z plane
+      }
+      
+      const sr = sb.soi_radius * pxScale;
       if (sr > 4 && sr < 5000) {
         ctx.strokeStyle = "rgba(60,120,180,0.3)";
         ctx.setLineDash([3, 5]);
@@ -121,100 +119,113 @@ if (soi_bodies) for (const sb of soi_bodies) {
 
       ctx.fillStyle = "rgba(68,170,255,0.6)";
       ctx.beginPath(); ctx.arc(sp.x, sp.y, 3, 0, Math.PI * 2); ctx.fill();
-
       ctx.fillStyle = "rgba(104,170,170,0.8)";
-      ctx.font = "bold 9px 'Orbitron', sans-serif";
+      ctx.font = "bold 9px 'Orbitron'";
       ctx.textAlign = "left";
       ctx.fillText(sb.name.toUpperCase(), sp.x + 6, sp.y - 8);
 
-      if (target && sb.name === target.name) {
+      if (isTarget) {
         ctx.strokeStyle = TARGET_COLOR;
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(sp.x, sp.y, 6, 0, Math.PI * 2); ctx.stroke();
       }
     }
 
-    // ─── Target Orbit ─────────────────────────────────────────────
+    // ─── Orbits ───────────────────────────────────────────────────
     if (target) {
       const tp = makeOrbitPts(target.orbit, 128);
-      ctx.strokeStyle = "rgba(255,221,68,0.5)";
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = "rgba(255,221,68,0.4)";
+      ctx.lineWidth = 1.0;
       drawPath(ctx, tp, toScreen);
     }
 
-    // ─── Current Vessel Orbit ─────────────────────────────────────
     const vpts = makeOrbitPts(orbit, 128);
     ctx.strokeStyle = ORBIT_COLOR;
     ctx.lineWidth = 1.5;
     drawPath(ctx, vpts, toScreen);
 
-    // ─── Maneuvers & Patched Conics ────────────────────────────────
+    // ─── Maneuvers ────────────────────────────────────────────────
     if (maneuvers) {
       maneuvers.forEach((m, idx) => {
         if (!m.post_orbit) return;
         const color = NODE_COLORS[idx % NODE_COLORS.length];
+        const hasTransition = !!(m.post_orbit.transition_ut && m.post_orbit.next_orbit);
+        
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.2;
         ctx.setLineDash([5, 4]);
 
-        const utStart = m.ut;
-        const utEnd = m.post_orbit.transition_ut || (utStart + (orbit.period || 3600));
-        const pts1 = makeOrbitPts(m.post_orbit as any as OrbitData, 128, utStart, utEnd);
-        drawPath(ctx, pts1, toScreen);
-        ctx.setLineDash([]);
-
-        if (m.post_orbit.next_orbit && m.post_orbit.transition_ut) {
-          const next = m.post_orbit.next_orbit;
-          const tut = m.post_orbit.transition_ut;
+        if (hasTransition) {
+          const pts1 = makeOrbitPts(m.post_orbit as any, 128, m.ut, m.post_orbit.transition_ut!);
+          drawPath(ctx, pts1, toScreen);
+          
+          const next = m.post_orbit.next_orbit!;
+          const tut = m.post_orbit.transition_ut!;
           const targetBody = soi_bodies?.find(b => b.name === next.body_name);
           if (targetBody && targetBody.orbit) {
-            const ghostVec3 = getPosAtUt(targetBody.orbit, tut);
-            const ghostScreen = toScreen({ x: ghostVec3.x, y: ghostVec3.y });
+            const ghostPos = getPosAtUt(targetBody.orbit, tut);
+            const ghostScreen = toScreen(ghostPos);
 
-            ctx.strokeStyle = "rgba(255,255,255,0.2)";
+            // Ghost Body
+            ctx.strokeStyle = "rgba(255,255,255,0.3)";
             ctx.setLineDash([2, 2]);
             ctx.beginPath(); ctx.arc(ghostScreen.x, ghostScreen.y, 4, 0, Math.PI * 2); ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = "rgba(255,255,255,0.3)";
+            ctx.fillStyle = "rgba(255,255,255,0.4)";
             ctx.font = "italic 8px Orbitron";
             ctx.fillText(`${targetBody.name.toUpperCase()} (ENCOUNTER)`, ghostScreen.x + 8, ghostScreen.y - 8);
 
-            const pts2 = makeOrbitPts(next as any as OrbitData, 64, tut, tut + (next.period || 3600));
+            // Bending Path
+            ctx.strokeStyle = color;
+            ctx.setLineDash([5, 4]);
+            const pts2 = makeOrbitPts(next as any, 64, tut, tut + 3600);
             drawPath(ctx, pts2, (v) => toScreen(v, ghostScreen));
 
-            const peVec3_target = getPosAtTrueAnomaly(next as any as OrbitData, 0);
-            const peScreen = toScreen({ x: peVec3_target.x, y: peVec3_target.y }, ghostScreen);
+            // Target Pe
+            const pePos = getPosAtTrueAnomaly(next as any, 0);
+            const peScreen = toScreen(pePos, ghostScreen);
             ctx.fillStyle = "#fb0";
             ctx.beginPath(); ctx.arc(peScreen.x, peScreen.y, 3, 0, Math.PI * 2); ctx.fill();
             ctx.font = "bold 9px 'Share Tech Mono'";
             ctx.fillText(`TARGET Pe: ${fmtAlt(next.periapsis_altitude)}`, peScreen.x + 8, peScreen.y + 3);
           }
+        } else {
+          const ptsFull = makeOrbitPts(m.post_orbit as any, 128);
+          drawPath(ctx, ptsFull, toScreen);
         }
+        ctx.setLineDash([]);
       });
     }
 
-    // ─── Central Body (Kerbin) ────────────────────────────────────
+    // ─── Central Body ─────────────────────────────────────────────
     let pr = bodyR * pxScale;
-    if (pr < 5) pr = 5;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr);
-    grad.addColorStop(0, "rgba(68,136,255,0.2)");
-    grad.addColorStop(1, "rgba(68,136,255,0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(cx, cy, pr * 2, 0, Math.PI * 2); ctx.fill();
+    if (!isFinite(pr) || pr < 5) pr = 5;
+    
+    if (isFinite(cx) && isFinite(cy)) {
+      try {
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr);
+        grad.addColorStop(0, "rgba(68,136,255,0.2)");
+        grad.addColorStop(1, "rgba(68,136,255,0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(cx, cy, pr * 2, 0, Math.PI * 2); ctx.fill();
+      } catch (e) {
+        console.warn("Gradient failed:", e);
+      }
+    }
+    
     ctx.strokeStyle = "rgba(68,170,255,0.8)";
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.stroke();
-    
-    ctx.fillStyle = "rgba(68,170,255,1)";
-    ctx.font = "bold 10px Orbitron, sans-serif";
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 10px Orbitron";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(orbit.body_name.toUpperCase(), cx, cy);
     ctx.textBaseline = "alphabetic";
 
-    // ─── Vessel Icon ──────────────────────────────────────────────
-    const vvec3 = getPosAtTrueAnomaly(orbit, orbit.true_anomaly);
-    const vp = toScreen({ x: vvec3.x, y: vvec3.y });
+    // ─── Vessel ───────────────────────────────────────────────────
+    const vPos = getPosAtUt(orbit, ut);
+    const vp = toScreen(vPos);
     ctx.fillStyle = "#4f6";
     ctx.shadowBlur = 10; ctx.shadowColor = "#4f6";
     ctx.beginPath();
@@ -224,11 +235,11 @@ if (soi_bodies) for (const sb of soi_bodies) {
     ctx.strokeStyle = "rgba(0,0,0,0.5)";
     ctx.stroke();
 
-    // ─── Periapsis / Apoapsis ─────────────────────────────────────
-    const peVec3 = getPosAtTrueAnomaly(orbit, 0);
-    const apVec3 = getPosAtTrueAnomaly(orbit, Math.PI);
-    const peS = toScreen({ x: peVec3.x, y: peVec3.y });
-    const apS = toScreen({ x: apVec3.x, y: apVec3.y });
+    // ─── Pe / Ap ──────────────────────────────────────────────────
+    const pePos = getPosAtTrueAnomaly(orbit, 0);
+    const apPos = getPosAtTrueAnomaly(orbit, Math.PI);
+    const peS = toScreen(pePos);
+    const apS = toScreen(apPos);
     ctx.fillStyle = ORBIT_COLOR;
     ctx.font = "bold 9px 'Share Tech Mono'";
     ctx.textAlign = "left";
@@ -241,20 +252,17 @@ if (soi_bodies) for (const sb of soi_bodies) {
       ctx.fillText(`Ap: ${fmtAlt(orbit.apoapsis_altitude)}`, apS.x + 8, apS.y + 3);
     }
 
-    // ─── Maneuver Node Icons ──────────────────────────────────────
+    // ─── Node Icons ───────────────────────────────────────────────
     nodePositions.current = [];
     if (maneuvers) {
       maneuvers.forEach((m, idx) => {
-        const nuN = nodeTrueAnomaly(m.ut, orbit);
-        const nvec3 = getPosAtTrueAnomaly(orbit, nuN);
-        const np = toScreen({ x: nvec3.x, y: nvec3.y });
+        const nPos = getPosAtUt(orbit, m.ut);
+        const np = toScreen(nPos);
         nodePositions.current.push(np);
-
         const col = mouseOnNodeIdx.current === idx ? "#fff" : NODE_COLORS[idx % NODE_COLORS.length];
         ctx.fillStyle = col;
         ctx.beginPath(); ctx.arc(np.x, np.y, 6, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = "#000"; ctx.stroke();
-        ctx.font = "bold 9px 'Share Tech Mono'";
         ctx.fillText(`${idx + 1}`, np.x + 10, np.y + 3);
       });
     }
@@ -282,8 +290,7 @@ if (soi_bodies) for (const sb of soi_bodies) {
     const handler = (e: WheelEvent) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       const f = e.deltaY < 0 ? 1.15 : 0.87;
       setZoom(prevZoom => {
         const newZoom = Math.max(0.005, Math.min(500, prevZoom * f));
@@ -300,8 +307,7 @@ if (soi_bodies) for (const sb of soi_bodies) {
   }, [pan.x, pan.y]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    const mx = e.nativeEvent.offsetX;
-    const my = e.nativeEvent.offsetY;
+    const mx = e.nativeEvent.offsetX, my = e.nativeEvent.offsetY;
     let clickedNodeIdx = -1;
     nodePositions.current.forEach((pos, idx) => {
       const dx = mx - pos.x, dy = my - pos.y;
@@ -349,44 +355,74 @@ export default OrbitMap;
 
 // ─── PHYSICS HELPERS ───────────────────────────────────────────
 
-function getPosAtTrueAnomaly(o: OrbitData, nu: number) {
+function getPosAtTrueAnomaly(o: OrbitData | PostOrbitData, nu: number) {
+  // r is distance from center
   const r = o.semi_major_axis * (1 - o.eccentricity * o.eccentricity) / (1 + o.eccentricity * Math.cos(nu));
-  const xp = r * Math.cos(nu), yp = r * Math.sin(nu);
-  const cw = Math.cos(o.argument_of_periapsis), sw = Math.sin(o.argument_of_periapsis);
-  const ci = Math.cos(o.inclination), si = Math.sin(o.inclination);
-  const cl = Math.cos(o.longitude_of_ascending_node), sl = Math.sin(o.longitude_of_ascending_node);
-  const x1 = xp * cw - yp * sw, y1 = xp * sw + yp * cw;
-  const y2 = y1 * ci, z2 = y1 * si;
-  const x3 = x1 * cl - y2 * sl, y3 = x1 * sl + y2 * cl;
-  return { x: x3, y: y3, z: z2 };
+  
+  // Standard 2D projection for technical radar:
+  // Angle = Argument of Periapsis + True Anomaly + Longitude of Ascending Node
+  // This preserves the radial distance 'r' exactly in the visual.
+  const angle = o.argument_of_periapsis + nu + o.longitude_of_ascending_node;
+  
+  return { 
+    x: r * Math.cos(angle), 
+    y: r * Math.sin(angle) 
+  }; 
 }
 
-function getPosAtUt(o: OrbitData, ut: number) {
+function utToTrueAnomaly(o: OrbitData | PostOrbitData, ut: number): number {
+  const a = o.semi_major_axis;
+  const e = o.eccentricity;
   const mu = o.mu || 3.5316e12;
-  const n = Math.sqrt(mu / Math.pow(Math.abs(o.semi_major_axis), 3));
   const dt = ut - o.epoch;
-  const M = (o.true_anomaly_at_epoch || 0) + n * dt;
-  return getPosAtTrueAnomaly(o, M);
+
+  const n = Math.sqrt(mu / Math.pow(Math.abs(a), 3));
+  const M0 = o.mean_anomaly_at_epoch || 0;
+  const M = M0 + n * dt;
+  
+  if (e < 1.0) {
+    let E = M;
+    for (let i = 0; i < 10; i++) {
+      const dE = (M - (E - e * Math.sin(E))) / (1 - e * Math.cos(E));
+      E += dE;
+      if (Math.abs(dE) < 1e-7) break;
+    }
+    return 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+  } else {
+    let H = M;
+    for (let i = 0; i < 10; i++) {
+      const dH = (M - (e * Math.sinh(H) - H)) / (e * Math.cosh(H) - 1);
+      H += dH;
+      if (Math.abs(dH) < 1e-7) break;
+    }
+    return 2 * Math.atan2(Math.sqrt(e + 1) * Math.tanh(H / 2), Math.sqrt(e - 1));
+  }
 }
 
-function makeOrbitPts(o: OrbitData, count: number, utStart?: number, utEnd?: number) {
+function getPosAtUt(o: OrbitData | PostOrbitData, ut: number) {
+  return getPosAtTrueAnomaly(o, utToTrueAnomaly(o, ut));
+}
+
+function makeOrbitPts(o: OrbitData | PostOrbitData, count: number, utStart?: number, utEnd?: number) {
   const pts = [];
   const isHyperbolic = o.eccentricity > 1.0;
   if (utStart != null && utEnd != null) {
-    const step = (utEnd - utStart) / count;
+    const duration = utEnd - utStart;
+    const step = duration / count;
     for (let i = 0; i <= count; i++) {
-      const ut = utStart + i * step;
-      const nu = utToTrueAnomaly(o, ut);
-      const pos = getPosAtTrueAnomaly(o, nu);
-      pts.push({ x: pos.x, y: pos.y });
+      pts.push(getPosAtUt(o, utStart + i * step));
     }
   } else {
-    const range = isHyperbolic ? 2.0 : Math.PI * 2;
-    const start = isHyperbolic ? -1.0 : 0;
-    for (let i = 0; i <= count; i++) {
-      const nu = start + (i / count) * range;
-      const pos = getPosAtTrueAnomaly(o, nu);
-      pts.push({ x: pos.x, y: pos.y });
+    if (isHyperbolic) {
+      for (let i = 0; i <= count; i++) {
+        const nu = -1.2 + (i / count) * 2.4;
+        pts.push(getPosAtTrueAnomaly(o, nu));
+      }
+    } else {
+      for (let i = 0; i <= count; i++) {
+        const nu = (i / count) * Math.PI * 2;
+        pts.push(getPosAtTrueAnomaly(o, nu));
+      }
     }
   }
   return pts;
@@ -399,18 +435,6 @@ function drawPath(ctx: CanvasRenderingContext2D, pts: {x:number, y:number}[], pr
     if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
   });
   ctx.stroke();
-}
-
-function utToTrueAnomaly(o: OrbitData, ut: number): number {
-  const a = o.semi_major_axis, e = o.eccentricity;
-  const mu = o.mu || 3.5316e12;
-  const n = Math.sqrt(mu / Math.pow(Math.abs(a), 3));
-  const dt = ut - o.epoch;
-  return n * dt; 
-}
-
-function nodeTrueAnomaly(ut: number, o: OrbitData): number {
-  return utToTrueAnomaly(o, ut);
 }
 
 function fmtDistShort(m: number): string {
