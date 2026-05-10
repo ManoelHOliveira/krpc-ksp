@@ -37,6 +37,7 @@ export interface PostOrbitData {
 }
 
 export interface ManeuverData {
+  id: number;
   ut: number;
   prograde: number;
   normal: number;
@@ -63,8 +64,7 @@ export interface SoiBodyData {
   pos_y: number;
   pos_z: number;
   soi_radius: number;
-  encounter: boolean;
-  close_approach: number;
+  vessel_distance: number;
 }
 
 export interface EncounterData {
@@ -79,10 +79,11 @@ export interface ServerData {
   vessel?: VesselData | null;
   orbit?: OrbitData | null;
   target?: TargetData | null;
-  maneuver?: ManeuverData | null;
-  soi_bodies?: SoiBodyData[];
+  maneuvers?: ManeuverData[];
   encounter?: EncounterData | null;
+  soi_bodies?: SoiBodyData[];
   encounter_text?: string;
+  server_time?: number;
   error?: string | null;
 }
 

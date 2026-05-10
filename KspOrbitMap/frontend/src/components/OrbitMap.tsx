@@ -11,9 +11,9 @@ export interface OrbitMapHandle {
 }
 
 const ORBIT_COLOR = "#00ff88";
-const POST_COLOR = "#4488ff";
+const POST_COLOR = "#4af"; // Standard KSP blue
 const TARGET_COLOR = "#ffdd44";
-const NODE_COLOR = "#4488ff";
+const NODE_COLORS = ["#4af", "#f0f", "#0ff", "#ff0", "#4f6", "#f44"];
 
 const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,8 +22,8 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
   const panning = useRef(false);
   const dragging = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
-  const mouseOnNode = useRef(false);
-  const nodePos = useRef({ x: 0, y: 0 });
+  const mouseOnNodeIdx = useRef<number | null>(null);
+  const nodePositions = useRef<{ x: number; y: number }[]>([]);
 
   const drawRef = useRef<() => void>(() => {});
 
@@ -48,15 +48,15 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     const H = canvas.height;
 
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#08081a";
+    ctx.fillStyle = "#05080c";
     ctx.fillRect(0, 0, W, H);
 
-    const { orbit, vessel, maneuver, target, soi_bodies, connected } = data;
+    const { orbit, vessel, maneuvers, target, soi_bodies, connected, encounter } = data;
     if (!connected || !orbit) {
-      ctx.fillStyle = "#445";
-      ctx.font = "20px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#2a3a4a";
+      ctx.font = "bold 14px Orbitron, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Desconectado", W / 2, H / 2);
+      ctx.fillText("WAITING FOR TELEMETRY LINK...", W / 2, H / 2);
       return;
     }
 
@@ -82,8 +82,8 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
       return { x: cx + x * pxScale, y: cy - y * pxScale };
     };
 
-    // ─── RPM radar grid ───────────────────────────────────────────
-    ctx.strokeStyle = "rgba(40,80,60,0.3)";
+    // ─── Technical grid ───────────────────────────────────────────
+    ctx.strokeStyle = "rgba(68,136,255,0.1)";
     ctx.lineWidth = 0.5;
 
     for (let i = 1; i <= 5; i++) {
@@ -95,21 +95,21 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
       // Range label
       const labelDist = maxDist * (i / 5);
       const label = fmtDistShort(labelDist);
-      ctx.fillStyle = "rgba(100,200,140,0.25)";
-      ctx.font = "8px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "rgba(104,170,170,0.4)";
+      ctx.font = "bold 9px 'Share Tech Mono', monospace";
       ctx.textAlign = "center";
       ctx.fillText(label, cx + rr + 4, cy + 3);
     }
 
     // Outer ring (thicker)
-    ctx.strokeStyle = "rgba(60,140,100,0.4)";
+    ctx.strokeStyle = "rgba(68,136,255,0.2)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.ellipse(cx, cy, drawR * zoom, drawR * zoom, 0, 0, Math.PI * 2);
     ctx.stroke();
 
     // Crosshair
-    ctx.strokeStyle = "rgba(40,80,60,0.25)";
+    ctx.strokeStyle = "rgba(68,136,255,0.15)";
     ctx.lineWidth = 0.5;
     const ax = drawR * zoom;
     ctx.beginPath(); ctx.moveTo(cx - ax, cy); ctx.lineTo(cx + ax, cy); ctx.stroke();
@@ -121,7 +121,6 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
       const sy = cy - sb.pos_y * pxScale;
       const sr = sb.soi_radius * pxScale;
 
-      // SOI circle
       if (sr > 4 && sr < 5000) {
         ctx.strokeStyle = "rgba(60,120,180,0.3)";
         ctx.lineWidth = 0.5;
@@ -130,23 +129,26 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
         ctx.setLineDash([]);
       }
 
-      // Body dot
-      ctx.fillStyle = "rgba(100,160,200,0.5)";
+      ctx.fillStyle = "rgba(68,170,255,0.6)";
       ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
 
-      // Name
-      ctx.fillStyle = sb.encounter ? "#ff0" : "rgba(150,180,220,0.7)";
-      ctx.font = "7px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "rgba(104,170,170,0.8)";
+      ctx.font = "bold 9px 'Orbitron', sans-serif";
       ctx.textAlign = "left";
-      ctx.fillText(sb.name, sx + 5, sy - 8);
+      ctx.fillText(sb.name.toUpperCase(), sx + 6, sy - 8);
 
-      if (sb.encounter && maneuver) {
-        ctx.fillStyle = "#ff0";
-        ctx.font = "bold 7px 'Segoe UI', sans-serif";
-        ctx.fillText(`SOI \u2192 ${sb.name}`, sx + 5, sy + 4);
+      if (encounter && encounter.body_name === sb.name) {
+        ctx.fillStyle = "#fb0";
+        ctx.font = "bold 10px 'Orbitron', sans-serif";
+        ctx.fillText(`\u2192 ENCOUNTER: ${sb.name.toUpperCase()}`, sx + 6, sy + 6);
+        ctx.font = "bold 9px 'Share Tech Mono', monospace";
+        ctx.fillText(`Pe: ${fmtAlt(encounter.periapsis_altitude)}`, sx + 6, sy + 18);
+        ctx.strokeStyle = "#fb0";
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath(); ctx.arc(sx, sy, 12, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      // Target body: yellow circle
       if (target && sb.name === target.name) {
         ctx.strokeStyle = TARGET_COLOR;
         ctx.lineWidth = 2;
@@ -170,50 +172,53 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     ctx.lineWidth = 1.5;
     drawOrbit(ctx, pts);
 
-    // ─── Post-burn orbit (blue dashed) ──────────────────────────
-    let postPePos = { x: 0, y: 0 };
-    let postApPos = { x: 0, y: 0 };
-    if (maneuver?.post_orbit) {
-      const po = maneuver.post_orbit;
-      const postPts = makeOrbit(po.semi_major_axis, po.eccentricity, po.argument_of_periapsis, po.inclination, po.longitude_of_ascending_node, 128, pxScale, cx, cy);
-      ctx.strokeStyle = POST_COLOR;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 4]);
-      drawOrbit(ctx, postPts);
-      ctx.setLineDash([]);
-      postPePos = peritoScreen(po.periapsis, 0, po.argument_of_periapsis, po.inclination, po.longitude_of_ascending_node);
-      postApPos = peritoScreen(po.apoapsis, Math.PI, po.argument_of_periapsis, po.inclination, po.longitude_of_ascending_node);
+    // ─── Post-burn orbits (multi-node) ──────────────────────────
+    if (maneuvers && maneuvers.length > 0) {
+      maneuvers.forEach((m, idx) => {
+        if (m.post_orbit) {
+          const po = m.post_orbit;
+          const postPts = makeOrbit(po.semi_major_axis, po.eccentricity, po.argument_of_periapsis, po.inclination, po.longitude_of_ascending_node, 128, pxScale, cx, cy);
+          ctx.strokeStyle = NODE_COLORS[idx % NODE_COLORS.length];
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([5, 4]);
+          drawOrbit(ctx, postPts);
+          ctx.setLineDash([]);
+        }
+      });
     }
 
     // ─── Planet (transparent + white ring) ──────────────────────
     let pr = bodyR * pxScale;
     if (pr < 5) pr = 5;
-    // inner glow
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr);
-    grad.addColorStop(0, "rgba(40,80,60,0.15)");
-    grad.addColorStop(1, "rgba(40,80,60,0)");
+    grad.addColorStop(0, "rgba(68,136,255,0.2)");
+    grad.addColorStop(1, "rgba(68,136,255,0)");
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(cx, cy, pr * 2, 0, Math.PI * 2); ctx.fill();
-    // ring
-    ctx.strokeStyle = "rgba(180,220,180,0.6)";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(68,170,255,0.8)";
+    ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(cx, cy, pr, 0, Math.PI * 2); ctx.stroke();
-    // name
-    ctx.fillStyle = "rgba(180,220,180,0.8)";
-    ctx.font = "bold 8px 'Segoe UI', sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(orbit.body_name, cx + pr + 6, cy + 4);
+    // name - CENTERED INSIDE
+    ctx.fillStyle = "rgba(68,170,255,1)";
+    ctx.font = "bold 10px Orbitron, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(orbit.body_name.toUpperCase(), cx, cy);
+    ctx.textBaseline = "alphabetic"; // Reset
 
     // ─── Vessel ─────────────────────────────────────────────────
     const curR = orbit.semi_major_axis * (1 - orbit.eccentricity * orbit.eccentricity) / (1 + orbit.eccentricity * Math.cos(orbit.true_anomaly));
     const vp = peritoScreen(curR, orbit.true_anomaly, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
-    ctx.fillStyle = "#44ffaa";
+    ctx.fillStyle = "#4f6";
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "#4f6";
     ctx.beginPath();
     ctx.moveTo(vp.x, vp.y - 8);
     ctx.lineTo(vp.x - 5, vp.y + 5);
     ctx.lineTo(vp.x + 5, vp.y + 5);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = "rgba(0,100,50,0.5)";
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
     ctx.lineWidth = 1;
     ctx.stroke();
 
@@ -221,66 +226,44 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     const pep = peritoScreen(orbit.periapsis, 0, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
     const app = peritoScreen(orbit.apoapsis, Math.PI, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
     ctx.fillStyle = ORBIT_COLOR;
-    ctx.font = "bold 8px 'Segoe UI', sans-serif";
+    ctx.font = "bold 9px 'Share Tech Mono', monospace";
     ctx.textAlign = "left";
     if (pep.x > 0) {
       ctx.strokeStyle = ORBIT_COLOR;
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(pep.x, pep.y, 3, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillText("Pe", pep.x + 6, pep.y + 3);
+      ctx.fillText(`Pe: ${fmtAlt(orbit.periapsis_altitude)}`, pep.x + 8, pep.y + 3);
     }
     if (app.x > 0) {
       ctx.strokeStyle = ORBIT_COLOR;
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(app.x, app.y, 3, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillText("Ap", app.x + 6, app.y + 3);
-    }
-    if (maneuver) {
-      ctx.fillStyle = POST_COLOR;
-      ctx.font = "bold 7px 'Segoe UI', sans-serif";
-      if (postPePos.x > 0) {
-        ctx.strokeStyle = POST_COLOR;
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(postPePos.x, postPePos.y, 2.5, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillText("Pe'", postPePos.x + 5, postPePos.y + 3);
-      }
-      if (postApPos.x > 0) {
-        ctx.strokeStyle = POST_COLOR;
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(postApPos.x, postApPos.y, 2.5, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillText("Ap'", postApPos.x + 5, postApPos.y + 3);
-      }
+      ctx.fillText(`Ap: ${fmtAlt(orbit.apoapsis_altitude)}`, app.x + 8, app.y + 3);
     }
 
-    // ─── Maneuver node ──────────────────────────────────────────
-    if (maneuver) {
-      const nuN = nodeTrueAnomaly(maneuver.ut, orbit);
-      const rN = orbit.semi_major_axis * (1 - orbit.eccentricity * orbit.eccentricity) / (1 + orbit.eccentricity * Math.cos(nuN));
-      const np = peritoScreen(rN, nuN, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
-      nodePos.current = np;
-      const timeToNode = maneuver.ut - orbit.epoch;
+    // ─── Maneuver nodes ──────────────────────────────────────────
+    nodePositions.current = [];
+    if (maneuvers) {
+      maneuvers.forEach((m, idx) => {
+        const nuN = nodeTrueAnomaly(m.ut, orbit);
+        const rN = orbit.semi_major_axis * (1 - orbit.eccentricity * orbit.eccentricity) / (1 + orbit.eccentricity * Math.cos(nuN));
+        const np = peritoScreen(rN, nuN, orbit.argument_of_periapsis, orbit.inclination, orbit.longitude_of_ascending_node);
+        nodePositions.current.push(np);
 
-      const col = mouseOnNode.current ? "#ffa500" : NODE_COLOR;
-      const bcol = mouseOnNode.current ? "#ffdd44" : "rgba(100,160,255,0.8)";
-      ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(np.x, np.y, 7, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = bcol;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(np.x, np.y, 7, 0, Math.PI * 2); ctx.stroke();
+        const col = mouseOnNodeIdx.current === idx ? "#fff" : NODE_COLORS[idx % NODE_COLORS.length];
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(np.x, np.y, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 7px 'Segoe UI', sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText("\u0394V", np.x + 10, np.y + 3);
-
-      ctx.fillStyle = "rgba(100,160,255,0.9)";
-      ctx.font = "8px 'Segoe UI', sans-serif";
-      ctx.fillText(`\u0394V: ${maneuver.delta_v.toFixed(1)} m/s`, np.x + 12, np.y + 14);
-      ctx.fillText(`T: ${fmtTimeCompact(timeToNode)}`, np.x + 12, np.y + 24);
+        ctx.fillStyle = col;
+        ctx.font = "bold 9px 'Share Tech Mono', monospace";
+        ctx.fillText(`${idx + 1}`, np.x + 10, np.y + 3);
+      });
     }
   }, [data, zoom, pan]);
 
-  // Resize
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -297,8 +280,6 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
 
   useEffect(() => { draw(); }, [draw]);
 
-  // ─── Mouse wheel: zoom-to-cursor ─────────────────────────────────
-  // Use non-passive listener so preventDefault() works
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -320,72 +301,71 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
     return () => canvas.removeEventListener("wheel", handler);
   }, [zoom, pan]);
 
-  // ─── Mouse: left drag pan / left drag node ─────────────────────
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    const { x, y } = nodePos.current;
-    const dx = e.nativeEvent.offsetX - x;
-    const dy = e.nativeEvent.offsetY - y;
-    if (dx * dx + dy * dy < 400 && data.maneuver) {
+    const mx = e.nativeEvent.offsetX;
+    const my = e.nativeEvent.offsetY;
+    
+    let clickedNodeIdx = -1;
+    nodePositions.current.forEach((pos, idx) => {
+      const dx = mx - pos.x;
+      const dy = my - pos.y;
+      if (dx * dx + dy * dy < 100) clickedNodeIdx = idx;
+    });
+
+    if (clickedNodeIdx !== -1) {
       dragging.current = true;
-      mouseOnNode.current = true;
-      lastMouse.current = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
+      mouseOnNodeIdx.current = clickedNodeIdx;
+      lastMouse.current = { x: mx, y: my };
       return;
     }
+    
     panning.current = true;
-    lastMouse.current = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
-  }, [data.maneuver]);
+    lastMouse.current = { x: mx, y: my };
+  }, [data.maneuvers]);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
-    if (dragging.current && data.maneuver && data.orbit) {
-      const dx = e.nativeEvent.offsetX - lastMouse.current.x;
-      const dy = e.nativeEvent.offsetY - lastMouse.current.y;
-      if (dx) send({ type: "set_maneuver", prograde: (data.maneuver.prograde ?? 0) + dx * 0.1 });
-      if (dy) send({ type: "set_maneuver", radial: (data.maneuver.radial ?? 0) - dy * 0.1 });
-      lastMouse.current = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
+    const mx = e.nativeEvent.offsetX;
+    const my = e.nativeEvent.offsetY;
+
+    if (dragging.current && mouseOnNodeIdx.current !== null && data.maneuvers) {
+      const idx = mouseOnNodeIdx.current;
+      const node = data.maneuvers[idx];
+      const dx = mx - lastMouse.current.x;
+      const dy = my - lastMouse.current.y;
+      if (dx) send({ type: "set_maneuver", index: idx, prograde: (node.prograde ?? 0) + dx * 0.1 });
+      if (dy) send({ type: "set_maneuver", index: idx, radial: (node.radial ?? 0) - dy * 0.1 });
+      lastMouse.current = { x: mx, y: my };
       return;
     }
+
     if (panning.current) {
-      const dx = e.nativeEvent.offsetX - lastMouse.current.x;
-      const dy = e.nativeEvent.offsetY - lastMouse.current.y;
+      const dx = mx - lastMouse.current.x;
+      const dy = my - lastMouse.current.y;
       if (dx || dy) {
         setPan(p => ({ x: p.x + dx, y: p.y + dy }));
-        lastMouse.current = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
+        lastMouse.current = { x: mx, y: my };
       }
       return;
     }
-    // hover on node
-    const { x, y } = nodePos.current;
-    const dd = e.nativeEvent.offsetX - x;
-    const dy2 = e.nativeEvent.offsetY - y;
-    const on = dd * dd + dy2 * dy2 < 400;
-    if (on !== mouseOnNode.current) {
-      mouseOnNode.current = on;
+
+    let hoverIdx = null;
+    nodePositions.current.forEach((pos, idx) => {
+      const dx = mx - pos.x;
+      const dy = my - pos.y;
+      if (dx * dx + dy * dy < 100) hoverIdx = idx;
+    });
+    if (hoverIdx !== mouseOnNodeIdx.current) {
+      mouseOnNodeIdx.current = hoverIdx;
       draw();
     }
   }, [data, draw, send]);
 
   const onMouseUp = useCallback(() => {
-    if (dragging.current) {
-      dragging.current = false;
-      mouseOnNode.current = false;
-      draw();
-    }
+    dragging.current = false;
     panning.current = false;
+    mouseOnNodeIdx.current = null;
+    draw();
   }, [draw]);
-
-  const onClick = useCallback((e: React.MouseEvent) => {
-    if (dragging.current || panning.current) return;
-    if (e.button === 2 && data.maneuver) {
-      const { x, y } = nodePos.current;
-      const dx = e.nativeEvent.offsetX - x;
-      const dy = e.nativeEvent.offsetY - y;
-      if (dx * dx + dy * dy < 400) send({ type: "remove_node" });
-    }
-  }, [data.maneuver, send]);
-
-  const onDblClick = useCallback(() => {
-    send({ type: "add_node", prograde: 0, normal: 0, radial: 0 });
-  }, [send]);
 
   return (
     <canvas
@@ -394,16 +374,13 @@ const OrbitMap = forwardRef<OrbitMapHandle, Props>(({ data, send }, ref) => {
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
-      onClick={onClick}
-      onDoubleClick={onDblClick}
+      onDoubleClick={() => send({ type: "add_node", prograde: 0, normal: 0, radial: 0 })}
       onContextMenu={e => e.preventDefault()}
     />
   );
 });
 
 export default OrbitMap;
-
-// ─── Helpers ──────────────────────────────────────────────────────
 
 function makeOrbit(a: number, e: number, w: number, inc: number, lan: number, n: number, pxScale: number, cx: number, cy: number): { x: number; y: number }[] {
   const pts: { x: number; y: number }[] = [];
@@ -417,19 +394,15 @@ function makeOrbit(a: number, e: number, w: number, inc: number, lan: number, n:
   return pts;
 }
 
-// Perifocal → reference frame: R_z(-lan) * R_x(-i) * R_z(-w) * (xp, yp, 0)
 function perifocalToRef(r: number, th: number, w: number, inc: number, lan: number): { x: number; y: number } {
   const xp = r * Math.cos(th), yp = r * Math.sin(th);
   const cw = Math.cos(w), sw = Math.sin(w);
   const ci = Math.cos(inc), si = Math.sin(inc);
   const cl = Math.cos(lan), sl = Math.sin(lan);
-  // R_z(-w)
   const x1 = xp * cw + yp * sw;
   const y1 = -xp * sw + yp * cw;
-  // R_x(-i) — z component is 0
   const x2 = x1;
   const y2 = y1 * ci;
-  // R_z(-lan) — project onto equatorial XY
   const x = x2 * cl + y2 * sl;
   const y = -x2 * sl + y2 * cl;
   return { x, y };
@@ -468,6 +441,13 @@ function fmtDistShort(m: number): string {
   if (m >= 1_000_000) return `${(m / 1_000_000).toFixed(1)}Mm`;
   if (m >= 1000) return `${(m / 1000).toFixed(0)}km`;
   return `${m.toFixed(0)}m`;
+}
+
+function fmtAlt(m: number): string {
+  if (m < 0) return "---";
+  if (m >= 1_000_000) return `${(m / 1_000_000).toFixed(2)} Mm`;
+  if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+  return `${m.toFixed(0)} m`;
 }
 
 function fmtTimeCompact(s: number): string {

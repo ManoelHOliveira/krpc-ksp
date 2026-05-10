@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { ServerData } from "../types";
+import type { ServerData, ManeuverData } from "../types";
 
 interface Props {
   data: ServerData;
@@ -7,137 +7,189 @@ interface Props {
 }
 
 const STEPS = [0.01, 0.1, 1, 5, 10, 100];
+const NODE_COLORS = ["#4af", "#f0f", "#0ff", "#ff0", "#4f6", "#f44"];
 
 export default function ManeuverBar({ data, send }: Props) {
   const [inc, setInc] = useState(1);
-  const [pro, setPro] = useState(0);
-  const [nor, setNor] = useState(0);
-  const [rad, setRad] = useState(0);
-  const [time, setTime] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(0);
+  
+  const maneuvers = data.maneuvers || [];
+  const m = maneuvers[activeIdx] || null;
 
-  const m = data.maneuver;
-
+  // Auto-switch to last node if active one is removed
   useEffect(() => {
-    if (m) {
-      setPro(m.prograde);
-      setNor(m.normal);
-      setRad(m.radial);
-      if (data.orbit) setTime(m.ut - data.orbit.epoch);
-    } else {
-      setPro(0); setNor(0); setRad(0); setTime(0);
+    if (maneuvers.length > 0 && activeIdx >= maneuvers.length) {
+      setActiveIdx(maneuvers.length - 1);
     }
-  }, [m, data.orbit]);
+  }, [maneuvers.length, activeIdx]);
 
-  const sendM = (key: string, val: number) => send({ type: "set_maneuver", [key]: val });
+  const sendM = (key: string, val: number) => {
+    send({ type: "set_maneuver", index: activeIdx, [key]: val });
+  };
+
+  const handleTimeChange = (v: number) => {
+     send({ type: "set_node_time", index: activeIdx, time: v });
+  };
 
   return (
     <div style={panelInner}>
       <style>{styleTag}</style>
       
-      {/* Header with technical info */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 15, borderBottom: "1px solid #2a3a4a", paddingBottom: 8 }}>
-        <div style={{ fontFamily: "Orbitron", fontSize: 12, fontWeight: 700, color: "#4af", letterSpacing: 2 }}>
-          ORBITAL MANEUVER UNIT
-        </div>
-        <div style={{ fontFamily: "Share Tech Mono", fontSize: 10, color: "#68a" }}>
-          REF: {data.orbit?.body_name?.toUpperCase() || "---"}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 20 }}>
-        {/* Left column: Vector controls */}
-        <div style={{ flex: 1 }}>
-          <VecGroup label="PROGRADE" color="#ff0" val={pro} set={v => { setPro(v); sendM("prograde", v); }}
-            inc={inc} sendM={sendM} keyName="prograde" />
-          <VecGroup label="NORMAL" color="#f0f" val={nor} set={v => { setNor(v); sendM("normal", v); }}
-            inc={inc} sendM={sendM} keyName="normal" />
-          <VecGroup label="RADIAL" color="#0ff" val={rad} set={v => { setRad(v); sendM("radial", v); }}
-            inc={inc} sendM={sendM} keyName="radial" />
-
-          {/* Step Selector */}
-          <div style={{ marginTop: 15, padding: "10px", background: "rgba(0,0,0,0.3)", border: "1px solid #1a2a3a" }}>
-            <div style={{ fontSize: 9, color: "#68a", fontFamily: "Orbitron", marginBottom: 5 }}>PRECISION STEP</div>
-            <div style={{ display: "flex", gap: 2 }}>
-              {STEPS.map(v => (
-                <button key={v} onClick={() => setInc(v)}
+      {/* Header with Node Selector */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 15, borderBottom: "1px solid #2a3a4a", paddingBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontFamily: "Orbitron", fontSize: 12, fontWeight: 700, color: "#4af", letterSpacing: 2 }}>
+            PLANNER
+          </div>
+          {maneuvers.length > 1 && (
+            <div style={{ display: "flex", gap: 4 }}>
+              {maneuvers.map((_, i) => (
+                <button key={i} onClick={() => setActiveIdx(i)}
                   style={{
-                    height: 22, flex: 1, borderRadius: 2, cursor: "pointer",
-                    fontSize: 10, fontWeight: 700, fontFamily: "Share Tech Mono",
-                    background: v === inc ? "#4af" : "#161b22",
-                    color: v === inc ? "#000" : "#68a",
-                    border: "1px solid #2a3a4a",
-                    transition: "all 0.1s"
-                  }}>{v}</button>
+                    width: 20, height: 20, borderRadius: "50%", cursor: "pointer",
+                    background: activeIdx === i ? NODE_COLORS[i % NODE_COLORS.length] : "transparent",
+                    border: `2px solid ${NODE_COLORS[i % NODE_COLORS.length]}`,
+                    color: activeIdx === i ? "#000" : NODE_COLORS[i % NODE_COLORS.length],
+                    fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center"
+                  }}>{i + 1}</button>
               ))}
             </div>
-          </div>
+          )}
         </div>
-
-        {/* Right column: Time and Post-Orbit info */}
-        <div style={{ width: 180, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ padding: "10px", background: "rgba(0,0,0,0.3)", border: "1px solid #1a2a3a", flex: 1 }}>
-            <div style={{ fontSize: 9, color: "#68a", fontFamily: "Orbitron", marginBottom: 5 }}>TIME TO NODE (T+)</div>
-            <div style={{ display: "flex", gap: 2, marginBottom: 5 }}>
-              <input type="number" step={1} value={time.toFixed(1)}
-                onChange={e => { const v = parseFloat(e.target.value) || 0; setTime(v); send({ type: "set_node_time", time: v }); }}
-                style={timeInputStyle} />
-              <div style={{ fontSize: 10, color: "#4af", alignSelf: "center", fontFamily: "Share Tech Mono" }}>S</div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-              <button style={tmBtn} onClick={() => { const v = Math.max(0, time - 60); setTime(v); send({ type: "set_node_time", time: v }); }}>-1M</button>
-              <button style={tpBtn} onClick={() => { const v = time + 60; setTime(v); send({ type: "set_node_time", time: v }); }}>+1M</button>
-              <button style={tmBtn} onClick={() => { const v = Math.max(0, time - 600); setTime(v); send({ type: "set_node_time", time: v }); }}>-10M</button>
-              <button style={tpBtn} onClick={() => { const v = time + 600; setTime(v); send({ type: "set_node_time", time: v }); }}>+10M</button>
-            </div>
-          </div>
-
-          <div style={{ padding: "10px", background: "rgba(0,0,0,0.5)", border: "1px solid #2a3a4a", borderRadius: 2 }}>
-             <InfoRow label="TOTAL ΔV" value={m ? `${m.delta_v.toFixed(2)} m/s` : "---"} highlight />
-             <InfoRow label="EST. BURN" value={m ? (m.burn_time > 0 ? `${m.burn_time.toFixed(1)}s` : "---") : "---"} />
-             <div style={{ height: 1, background: "#2a3a4a", margin: "5px 0" }} />
-             <InfoRow label="POST Pe" value={m?.post_orbit ? fmtAlt(m.post_orbit.periapsis_altitude) : "---"} />
-             <InfoRow label="POST Ap" value={m?.post_orbit ? fmtAlt(m.post_orbit.apoapsis_altitude) : "---"} />
-             <div style={{ height: 1, background: "#2a3a4a", margin: "5px 0" }} />
-             <InfoRow label="ENCOUNTER" value={data.encounter?.body_name?.toUpperCase() || "NONE"} color={data.encounter ? "#fb0" : "#68a"} />
-             <InfoRow label="TARGET Pe" value={data.encounter ? fmtAlt(data.encounter.periapsis_altitude) : "---"} highlight={!!data.encounter} color={data.encounter ? "#4f6" : "#68a"} />
-          </div>
+        <div style={{ fontFamily: "Share Tech Mono", fontSize: 10, color: "#68a" }}>
+          NODE {activeIdx + 1} / {maneuvers.length || 0}
         </div>
       </div>
 
-      {/* Bottom action row */}
-      <div style={{ display: "flex", gap: 6, marginTop: 15 }}>
-        <button style={actBtn("#1a6a3c", "#4f6")} onClick={() => send({ type: "add_node", prograde: pro, normal: nor, radial: rad })}>
-          NEW NODE
-        </button>
-        <button style={actBtn("#1a4a5a", "#4af")} onClick={() => send({ type: "add_node_pe", prograde: pro, normal: nor, radial: rad })}>
-          AT PE
-        </button>
-        <button style={actBtn("#1a4a5a", "#4af")} onClick={() => send({ type: "add_node_ap", prograde: pro, normal: nor, radial: rad })}>
-          AT AP
-        </button>
-        <button style={actBtn("#5a4a1a", "#fb0")} onClick={() => send({ type: "circularize" })}>
-          CIRCULARIZE
-        </button>
-        <div style={{ flex: 1 }} />
-        <button style={actBtn("#5a2a2a", "#f44")} onClick={() => send({ type: "remove_node" })}>
-          DELETE
-        </button>
-      </div>
+      {!m ? (
+        <div style={{ padding: "20px", textAlign: "center", color: "#68a", fontFamily: "Orbitron", fontSize: 11 }}>
+          NO ACTIVE MANEUVER NODES
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 15 }}>
+            <button style={actBtn("#1a6a3c", "#4f6")} 
+              onClick={() => send({ type: "add_node", prograde: 0, normal: 0, radial: 0 })}>
+              + GENERIC
+            </button>
+            <button style={actBtn("#1a4a5a", "#4af")} 
+              onClick={() => send({ type: "add_node_pe", prograde: 0, normal: 0, radial: 0 })}>
+              + AT PE
+            </button>
+            <button style={actBtn("#1a4a5a", "#4af")} 
+              onClick={() => send({ type: "add_node_ap", prograde: 0, normal: 0, radial: 0 })}>
+              + AT AP
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 20 }}>
+            {/* Left column: Vector controls */}
+            <div style={{ flex: 1 }}>
+              <VecGroup label="PROGRADE" color="#ff0" val={m.prograde} set={v => sendM("prograde", v)}
+                inc={inc} keyName="prograde" />
+              <VecGroup label="NORMAL" color="#f0f" val={m.normal} set={v => sendM("normal", v)}
+                inc={inc} keyName="normal" />
+              <VecGroup label="RADIAL" color="#0ff" val={m.radial} set={v => sendM("radial", v)}
+                inc={inc} keyName="radial" />
+
+              {/* Step Selector */}
+              <div style={{ marginTop: 15, padding: "10px", background: "rgba(0,0,0,0.3)", border: "1px solid #1a2a3a" }}>
+                <div style={{ fontSize: 9, color: "#68a", fontFamily: "Orbitron", marginBottom: 5 }}>PRECISION STEP</div>
+                <div style={{ display: "flex", gap: 2 }}>
+                  {STEPS.map(v => (
+                    <button key={v} onClick={() => setInc(v)}
+                      style={{
+                        height: 22, flex: 1, borderRadius: 2, cursor: "pointer",
+                        fontSize: 10, fontWeight: 700, fontFamily: "Share Tech Mono",
+                        background: v === inc ? "#4af" : "#161b22",
+                        color: v === inc ? "#000" : "#68a",
+                        border: "1px solid #2a3a4a",
+                        transition: "all 0.1s"
+                      }}>{v}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right column: Time and Post-Orbit info */}
+            <div style={{ width: 180, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ padding: "10px", background: "rgba(0,0,0,0.3)", border: "1px solid #1a2a3a", flex: 1 }}>
+                <div style={{ fontSize: 9, color: "#68a", fontFamily: "Orbitron", marginBottom: 5 }}>TIME TO NODE (T+)</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ position: "relative" }}>
+                    <input type="number" step={1} value={(m.ut - (data.orbit?.epoch || 0)).toFixed(1)}
+                      onChange={e => handleTimeChange(parseFloat(e.target.value) || 0)}
+                      style={{ ...timeInputStyle, width: "100%", height: "40px", textAlign: "center", fontSize: "16px", paddingBottom: "12px" }} />
+                    <div style={{ 
+                      position: "absolute", bottom: "4px", left: 0, right: 0, 
+                      textAlign: "center", fontSize: "8px", color: "#68a", 
+                      fontFamily: "Orbitron", pointerEvents: "none", textTransform: "uppercase" 
+                    }}>
+                      SECONDS
+                    </div>
+                  </div>
+                  <div style={{ 
+                    textAlign: "center", background: "rgba(0,0,0,0.4)", 
+                    padding: "4px", border: "1px solid #1a2a3a", borderRadius: 2,
+                    fontSize: "10px", color: "#4af", fontFamily: "Share Tech Mono"
+                  }}>
+                    {fmtMinSec(m.ut - (data.orbit?.epoch || 0))}
+                  </div>
+                  <div style={{ display: "flex", gap: 2 }}>
+                    <button style={{ ...vmBtn(), flex: 1, height: "30px" }} onClick={() => handleTimeChange(Math.max(0, (m.ut - (data.orbit?.epoch || 0)) - inc))}>-</button>
+                    <button style={{ ...vpBtn(), flex: 1, height: "30px" }} onClick={() => handleTimeChange((m.ut - (data.orbit?.epoch || 0)) + inc)}>+</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding: "10px", background: "rgba(0,0,0,0.5)", border: "1px solid #2a3a4a", borderRadius: 2 }}>
+                 <InfoRow label="TOTAL ΔV" value={`${m.delta_v.toFixed(2)} m/s`} highlight />
+                 <InfoRow label="EST. BURN" value={m.burn_time > 0 ? `${m.burn_time.toFixed(1)}s` : "---"} />
+                 <div style={{ height: 1, background: "#2a3a4a", margin: "5px 0" }} />
+                 <InfoRow label="POST Pe" value={m.post_orbit ? fmtAlt(m.post_orbit.periapsis_altitude) : "---"} />
+                 <InfoRow label="POST Ap" value={m.post_orbit ? fmtAlt(m.post_orbit.apoapsis_altitude) : "---"} />
+                 <div style={{ height: 1, background: "#2a3a4a", margin: "5px 0" }} />
+                 <InfoRow label="ENCOUNTER" value={data.encounter?.body_name?.toUpperCase() || "NONE"} color={data.encounter ? "#fb0" : "#68a"} />
+                 <InfoRow label="TARGET Pe" value={data.encounter ? fmtAlt(data.encounter.periapsis_altitude) : "---"} highlight={!!data.encounter} color={data.encounter ? "#4f6" : "#68a"} />
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom action row */}
+          <div style={{ display: "flex", gap: 6, marginTop: 15 }}>
+            <button style={actBtn("#1a6a3c", "#4f6")} onClick={() => send({ type: "add_node", prograde: 0, normal: 0, radial: 0 })}>
+              + ADD
+            </button>
+            <button style={actBtn("#1a4a5a", "#4af")} onClick={() => send({ type: "add_node_pe", prograde: 0, normal: 0, radial: 0 })}>
+              @PE
+            </button>
+            <button style={actBtn("#1a4a5a", "#4af")} onClick={() => send({ type: "add_node_ap", prograde: 0, normal: 0, radial: 0 })}>
+              @AP
+            </button>
+            <button style={actBtn("#5a4a1a", "#fb0")} onClick={() => send({ type: "circularize" })}>
+              CIRC
+            </button>
+            <div style={{ flex: 1 }} />
+            <button style={actBtn("#5a2a2a", "#f44")} onClick={() => send({ type: "remove_node", index: activeIdx })}>
+              DEL
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 // ─── VecGroup ─────────────────────────────────────────────────────
 
-function VecGroup({ label, color, val, set, inc, sendM, keyName }: {
+function VecGroup({ label, color, val, set, inc, keyName }: {
   label: string; color: string; val: number; set: (v: number) => void;
-  inc: number; sendM: (k: string, v: number) => void; keyName: string;
+  inc: number; keyName: string;
 }) {
   const [localVal, setLocalVal] = useState(val.toString());
   
   useEffect(() => { setLocalVal(val.toFixed(2)); }, [val]);
 
-  const commit = (v: number) => { set(v); sendM(keyName, v); };
+  const commit = (v: number) => { set(v); };
 
   return (
     <div style={{ marginBottom: 8, padding: "8px", background: "rgba(255,255,255,0.02)", border: "1px solid #1a2a3a", borderRadius: 2 }}>
@@ -252,4 +304,12 @@ function fmtAlt(m: number): string {
   if (m >= 1_000_000) return `${(m / 1_000_000).toFixed(2)} Mm`;
   if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
   return `${m.toFixed(0)} m`;
+}
+
+function fmtMinSec(s: number): string {
+  if (s < 0 || !isFinite(s)) return "---";
+  const m = Math.floor(s / 60);
+  const rs = Math.floor(s % 60);
+  if (m > 0) return `${m} MIN ${rs} SEC`;
+  return `${rs} SEC`;
 }

@@ -67,6 +67,7 @@ async def handle_cmd(ws, raw: str):
     try:
         msg = json.loads(raw)
         cmd = msg.get("type", "")
+        idx = msg.get("index", 0) # Support for multi-node indexing
 
         if cmd == "set_target":
             target_name = msg.get("target")
@@ -81,13 +82,13 @@ async def handle_cmd(ws, raw: str):
         elif cmd == "circularize":
             ksp.circularize()
         elif cmd == "remove_node":
-            ksp.remove_node()
+            ksp.remove_node(msg.get("index", -1))
         elif cmd == "set_maneuver":
-            ksp.set_maneuver(msg.get("prograde"), msg.get("normal"), msg.get("radial"))
+            ksp.set_maneuver(idx, msg.get("prograde"), msg.get("normal"), msg.get("radial"))
         elif cmd == "set_node_time":
             orbit = ksp.vessel.orbit if ksp.vessel else None
             if orbit:
-                ksp.set_node_time(orbit.epoch + float(msg.get("time", 0)))
+                ksp.set_node_time(idx, orbit.epoch + float(msg.get("time", 0)))
         elif cmd == "get_body_names":
             names = ksp.get_body_names()
             await ws.send(json.dumps({"type": "body_names", "names": names}))
