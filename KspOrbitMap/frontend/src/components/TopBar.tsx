@@ -19,28 +19,48 @@ export default function TopBar({ data, bodyNames, send }: Props) {
 
   return (
     <div style={barStyle}>
-      <span style={{ color: data.connected ? "#44ffaa" : "#ff4466", fontSize: 10 }}>●</span>
-      <span style={{ color: "rgba(180,200,180,0.7)", fontSize: 10, fontWeight: 600 }}>
-        {data.connected ? "KSP" : "OFF"}
-      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{
+          width: 8, height: 8, borderRadius: "50%",
+          background: data.connected ? "#4f6" : "#f46",
+          boxShadow: data.connected ? "0 0 10px #4f6" : "0 0 10px #f46"
+        }} />
+        <span style={{ 
+          color: data.connected ? "#4f6" : "#f46", 
+          fontSize: 10, fontWeight: 700, 
+          fontFamily: "Orbitron, sans-serif",
+          letterSpacing: 1
+        }}>
+          {data.connected ? "LINK ESTABLISHED" : "NO CONNECTION"}
+        </span>
+      </div>
 
       {data.connected && (
         <>
-          <span style={{ color: "#44ffaa", fontSize: 10, fontWeight: 700, marginLeft: 10 }}>
-            {data.vessel_name}
+          <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)", margin: "0 10px" }} />
+          
+          <span style={{ 
+            color: "#4af", fontSize: 11, fontWeight: 700, 
+            fontFamily: "Orbitron, sans-serif",
+            textShadow: "0 0 5px rgba(68,170,255,0.5)"
+          }}>
+            {data.vessel_name?.toUpperCase()}
           </span>
 
-          <div style={{ width: 1, height: 14, background: "rgba(255,255,255,0.1)", margin: "0 6px" }} />
+          <div style={{ flex: 1 }} />
 
-          <select style={selStyle}
-            value={data.target?.name || "none"}
-            onChange={e => send({ type: "set_target", target: e.target.value === "none" ? null : e.target.value })}>
-            <option value="none" style={optStyle}>-- target --</option>
-            {sorted.map(n => <option key={n} value={n} style={optStyle}>{n}</option>)}
-          </select>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 9, color: "#68a", fontWeight: 700, fontFamily: "Orbitron" }}>TARGET:</span>
+            <select style={selStyle}
+              value={data.target?.name || "none"}
+              onChange={e => send({ type: "set_target", target: e.target.value === "none" ? null : e.target.value })}>
+              <option value="none" style={optStyle}>-- SELECIONAR --</option>
+              {sorted.map(n => <option key={n} value={n} style={optStyle}>{n}</option>)}
+            </select>
 
-          <button style={btnStyle} onClick={() => send({ type: "set_target", target: null })}>Clear Tgt</button>
-          <button style={btnStyle} onClick={() => send({ type: "remove_node" })}>Clear Maneuver</button>
+            <button style={btnStyle} onClick={() => send({ type: "set_target", target: null })}>LIMPAR ALVO</button>
+            <button style={btnStyle} onClick={() => send({ type: "remove_node" })}>RESETAR MANOBRA</button>
+          </div>
         </>
       )}
     </div>
@@ -48,24 +68,31 @@ export default function TopBar({ data, bodyNames, send }: Props) {
 }
 
 const barStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 4, padding: "2px 10px",
-  background: "#0a0a14", height: 28,
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  display: "flex", alignItems: "center", padding: "0 15px",
+  background: "linear-gradient(to bottom, #161b22, #0d1117)",
+  height: 36,
+  borderBottom: "2px solid #2a3a4a",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.3)"
 };
 
 const selStyle: React.CSSProperties = {
-  height: 20, minWidth: 110, background: "#1a1a2a", color: "#ccc",
-  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3,
-  fontSize: 10, padding: "0 4px", outline: "none", cursor: "pointer",
+  height: 24, minWidth: 140, background: "#080c12", color: "#4af",
+  border: "1px solid #2a3a4a", borderRadius: 2,
+  fontSize: 10, padding: "0 6px", outline: "none", cursor: "pointer",
+  fontFamily: "Share Tech Mono, monospace",
+  textTransform: "uppercase"
 };
 
 const optStyle: React.CSSProperties = {
-  background: "#1a1a2a", color: "#ddd",
+  background: "#080c12", color: "#4af",
 };
 
 const btnStyle: React.CSSProperties = {
-  height: 20, background: "rgba(255,255,255,0.05)", color: "#bbb",
-  border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3,
-  cursor: "pointer", fontSize: 9, padding: "0 8px",
+  height: 24, background: "rgba(68,136,255,0.05)", color: "#8ab",
+  border: "1px solid #2a3a4a", borderRadius: 2,
+  cursor: "pointer", fontSize: 9, padding: "0 12px",
+  fontFamily: "Orbitron, sans-serif",
+  fontWeight: 600,
+  transition: "all 0.2s",
   display: "flex", alignItems: "center",
 };
