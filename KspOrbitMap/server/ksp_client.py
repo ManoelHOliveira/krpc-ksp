@@ -111,6 +111,7 @@ class KspClient:
                 },
                 "target": self._get_target_data(),
                 "maneuver": self._get_maneuver_data(),
+                "encounter": self._get_encounter_data(),
                 "soi_bodies": self._compute_soi_bodies(),
                 "encounter_text": self._compute_encounter_text(),
             }
@@ -119,6 +120,31 @@ class KspClient:
             import traceback
             traceback.print_exc()
             return {"connected": True, "error": str(ex)}
+
+    def _get_encounter_data(self) -> Optional[dict]:
+        if not self.connected: return None
+        try:
+            # Start from current orbit or maneuver orbit
+            orbit = self.maneuver_node.orbit if self.maneuver_node else self.vessel.orbit
+            if not orbit: return None
+
+            # Look for the next SOI transition
+            next_orb = orbit.next_orbit
+            if next_orb and next_orb.body:
+                return {
+                    "body_name": next_orb.body.name,
+                    "periapsis_altitude": next_orb.periapsis_altitude,
+                    "time_to_pe": next_orb.time_to_periapsis
+                }
+        except:
+            pass
+        return None
+
+    def _compute_encounter_text(self) -> str:
+        enc = self._get_encounter_data()
+        if enc:
+            return f"→ {enc['body_name']} (Pe: {self._fmt_dist(enc['periapsis_altitude'])})"
+        return ""
 
     def _get_target_data(self) -> Optional[dict]:
         if not self.target_body: return None
@@ -203,82 +229,25 @@ class KspClient:
         bodies = []
         try:
             current = self.vessel.orbit.body
-            check_orbit = self.maneuver_node.orbit if self.maneuver_node else self.vessel.orbit
-            mu = current.gravitational_parameter
             ref = current.reference_frame
-            n = 96
-
             for name, body in self._bodies_cache.items():
                 if name == current.name: continue
                 try:
                     soi = body.sphere_of_influence
                     if soi <= 0: continue
-                    if body.orbit is None: continue
-
                     pos = body.position(ref)
                     bx, by, bz = pos[0], pos[1], pos[2]
                     vessel_dist = math.sqrt(bx*bx + by*by + bz*bz)
-
-                    encounter = False
-                    close_dist = float("inf")
-
-                    if check_orbit:
-                        ca = check_orbit.semi_major_axis
-                        ce = check_orbit.eccentricity
-                        cw = check_orbit.argument_of_periapsis
-                        ci = check_orbit.inclination
-                        clan = check_orbit.longitude_of_ascending_node
-                        for i in range(n):
-                            th = 2 * math.pi * i / n
-                            r = ca * (1 - ce * ce) / (1 + ce * math.cos(th))
-                            if r < 0: continue
-                            ox = r * math.cos(th)
-                            oy = r * math.sin(th)
-                            wc, ws = math.cos(cw), math.sin(cw)
-                            wx = ox * wc + oy * ws
-                            wy = -ox * ws + oy * wc
-                            ic, ins = math.cos(ci), math.sin(ci)
-                            ix = wx
-                            iy = wy * ic
-                            iz = wy * ins
-                            lc, ls = math.cos(clan), math.sin(clan)
-                            px = ix * lc + iy * ls
-                            py = -ix * ls + iy * lc
-                            pz = iz
-                            dx = px - bx
-                            dy = py - by
-                            dz = pz - bz
-                            dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-                            close_dist = min(close_dist, dist)
-                            if dist < soi: encounter = True
-
                     bodies.append({
                         "name": name,
-                        "pos_x": bx,
-                        "pos_y": by,
-                        "pos_z": bz,
+                        "pos_x": bx, "pos_y": by, "pos_z": bz,
                         "soi_radius": soi,
-                        "encounter": encounter and self.maneuver_node is not None,
-                        "close_approach": close_dist,
                         "vessel_distance": vessel_dist,
                     })
-                except:
-                    continue
-        except:
-            pass
+                except: continue
+        except: pass
         bodies.sort(key=lambda b: b.get("vessel_distance", float("inf")))
         return bodies
-
-    def _compute_encounter_text(self) -> str:
-        try:
-            soi_bodies = self._compute_soi_bodies()
-            for sb in soi_bodies:
-                if sb.get("encounter"):
-                    ca = sb.get("close_approach", 0)
-                    return f"→ {sb['name']} (CA: {self._fmt_dist(ca)})"
-        except:
-            pass
-        return ""
 
     def _compute_encounter_coords(self) -> Optional[tuple[float, float, float]]:
         if not self.connected or not self.maneuver_node: return None

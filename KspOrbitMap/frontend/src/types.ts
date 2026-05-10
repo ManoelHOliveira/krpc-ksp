@@ -67,6 +67,12 @@ export interface SoiBodyData {
   close_approach: number;
 }
 
+export interface EncounterData {
+  body_name: string;
+  periapsis_altitude: number;
+  time_to_pe: number;
+}
+
 export interface ServerData {
   connected: boolean;
   vessel_name?: string;
@@ -75,6 +81,7 @@ export interface ServerData {
   target?: TargetData | null;
   maneuver?: ManeuverData | null;
   soi_bodies?: SoiBodyData[];
+  encounter?: EncounterData | null;
   encounter_text?: string;
   error?: string | null;
 }

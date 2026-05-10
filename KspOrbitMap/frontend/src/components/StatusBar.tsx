@@ -28,6 +28,11 @@ export default function StatusBar({ data }: Props) {
       parts.push(renderPart("Node ΔV", `${maneuver.delta_v.toFixed(1)} m/s`, "#ff0"));
       parts.push(renderPart("Time", fmtTimeCompact(maneuver.ut - orbit.epoch), "#ff0"));
     }
+
+    if (data.encounter) {
+      parts.push(<div key="sep2" style={{ width: 1, height: 12, background: "#2a3a4a", margin: "0 10px" }} />);
+      parts.push(renderPart(`${data.encounter.body_name} Pe`, fmtAlt(data.encounter.periapsis_altitude), "#fb0"));
+    }
   }
 
   return (

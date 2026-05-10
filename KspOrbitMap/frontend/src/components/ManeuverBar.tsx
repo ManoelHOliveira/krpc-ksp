@@ -97,7 +97,9 @@ export default function ManeuverBar({ data, send }: Props) {
              <div style={{ height: 1, background: "#2a3a4a", margin: "5px 0" }} />
              <InfoRow label="POST Pe" value={m?.post_orbit ? fmtAlt(m.post_orbit.periapsis_altitude) : "---"} />
              <InfoRow label="POST Ap" value={m?.post_orbit ? fmtAlt(m.post_orbit.apoapsis_altitude) : "---"} />
-             <InfoRow label="ENCOUNTER" value={data.encounter_text || "NONE"} color={data.encounter_text ? "#fb0" : "#68a"} />
+             <div style={{ height: 1, background: "#2a3a4a", margin: "5px 0" }} />
+             <InfoRow label="ENCOUNTER" value={data.encounter?.body_name?.toUpperCase() || "NONE"} color={data.encounter ? "#fb0" : "#68a"} />
+             <InfoRow label="TARGET Pe" value={data.encounter ? fmtAlt(data.encounter.periapsis_altitude) : "---"} highlight={!!data.encounter} color={data.encounter ? "#4f6" : "#68a"} />
           </div>
         </div>
       </div>
