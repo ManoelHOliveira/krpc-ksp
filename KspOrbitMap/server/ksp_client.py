@@ -81,6 +81,36 @@ class KspClient:
 
             orbit = self.vessel.orbit
             
+            # Root-level encounter info for visuals
+            encounter_info = None
+            try:
+                nodes = self.vessel.control.nodes
+                check_orbit = nodes[-1].orbit if nodes else self.vessel.orbit
+                if check_orbit:
+                    time_to_soi = check_orbit.time_to_soi_change
+                    if time_to_soi > 0 and not math.isinf(time_to_soi):
+                        next_orb = check_orbit.next_orbit
+                        if next_orb and next_orb.body:
+                            trans_ut = self.sc.ut + time_to_soi
+                            # Get the exact position of the target body at intercept time
+                            # relative to the body we are currently orbiting.
+                            pos = next_orb.body.position(check_orbit.body.reference_frame) # Current
+                            # But we want future position
+                            try:
+                                # We'll approximate future position using orbital math 
+                                # as kRPC position_at_ut can be slow or limited.
+                                # Or better: just pass the body's orbit and let the frontend 
+                                # use the same solver for everything.
+                                pass
+                            except: pass
+
+                            encounter_info = {
+                                "body_name": next_orb.body.name,
+                                "periapsis_altitude": next_orb.periapsis_altitude,
+                                "transition_ut": trans_ut,
+                            }
+            except: pass
+
             result = {
                 "connected": True,
                 "vessel_name": self.vessel.name,
@@ -95,7 +125,7 @@ class KspClient:
                 "orbit": self._serialize_orbit(orbit),
                 "target": self._get_target_data(),
                 "maneuvers": self._get_maneuvers_data(),
-                "encounter": self._get_encounter_data(),
+                "encounter": encounter_info,
                 "soi_bodies": self._compute_soi_bodies(),
                 "server_time": time.time(),
             }
@@ -180,12 +210,14 @@ class KspClient:
         except:
             return []
 
-    def _serialize_orbit(self, orbit) -> dict:
+    def _serialize_orbit(self, orbit, depth=0) -> dict:
+        if not orbit or depth > 2: return None
+        
         def s(val, default=0):
             try: return val
             except: return default
             
-        return {
+        data = {
             "semi_major_axis": s(orbit.semi_major_axis),
             "eccentricity": s(orbit.eccentricity),
             "argument_of_periapsis": s(orbit.argument_of_periapsis),
@@ -201,7 +233,16 @@ class KspClient:
             "body_name": orbit.body.name if s(orbit.body, None) else "Unknown",
             "body_radius": s(orbit.body.equatorial_radius) if s(orbit.body, None) else 600000,
             "mu": orbit.body.gravitational_parameter if s(orbit.body, None) else 3.5316e12,
+            "mean_anomaly": s(orbit.mean_anomaly),
         }
+        
+        try:
+            no = orbit.next_orbit
+            if no:
+                data["next_patch"] = self._serialize_orbit(no, depth + 1)
+        except: pass
+        
+        return data
 
     def _compute_soi_bodies(self) -> list[dict]:
         if not self.connected: return []
