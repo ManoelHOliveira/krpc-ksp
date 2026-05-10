@@ -34,6 +34,9 @@ export interface PostOrbitData {
   apoapsis_altitude: number;
   periapsis: number;
   apoapsis: number;
+  body_name?: string;
+  next_orbit?: PostOrbitData | null;
+  transition_ut?: number | null;
 }
 
 export interface ManeuverData {
@@ -65,6 +68,7 @@ export interface SoiBodyData {
   pos_z: number;
   soi_radius: number;
   vessel_distance: number;
+  orbit?: OrbitData | null;
 }
 
 export interface EncounterData {

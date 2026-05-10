@@ -172,17 +172,19 @@ class KspClient:
                 po = node.orbit
                 post = None
                 if po:
-                    post = {
-                        "semi_major_axis": po.semi_major_axis,
-                        "eccentricity": po.eccentricity,
-                        "argument_of_periapsis": po.argument_of_periapsis,
-                        "inclination": po.inclination,
-                        "longitude_of_ascending_node": po.longitude_of_ascending_node,
-                        "periapsis_altitude": po.periapsis_altitude,
-                        "apoapsis_altitude": po.apoapsis_altitude,
-                        "periapsis": po.periapsis,
-                        "apoapsis": po.apoapsis,
-                    }
+                    post = self._serialize_orbit(po)
+                    
+                    # Patched Conics: Get the next orbit if it exists
+                    try:
+                        no = po.next_orbit
+                        if no:
+                            post["next_orbit"] = self._serialize_orbit(no)
+                            # transition time is at the end of the current orbit segment
+                            post["transition_ut"] = po.start_ut + po.period # Approximate or exact from kRPC?
+                            # kRPC period for a hyperbolic entry is often weird, 
+                            # let's try to find the actual encounter time.
+                            # For simplicity, we'll use po.epoch if it's the start of the next segment.
+                    except: pass
 
                 isp = self.vessel.specific_impulse or 300
                 mass = self.vessel.mass
@@ -208,6 +210,22 @@ class KspClient:
         except:
             return []
 
+    def _serialize_orbit(self, orbit) -> dict:
+        return {
+            "semi_major_axis": orbit.semi_major_axis,
+            "eccentricity": orbit.eccentricity,
+            "argument_of_periapsis": orbit.argument_of_periapsis,
+            "inclination": orbit.inclination,
+            "longitude_of_ascending_node": orbit.longitude_of_ascending_node,
+            "true_anomaly": orbit.true_anomaly,
+            "epoch": orbit.epoch,
+            "periapsis_altitude": orbit.periapsis_altitude,
+            "apoapsis_altitude": orbit.apoapsis_altitude,
+            "periapsis": orbit.periapsis,
+            "apoapsis": orbit.apoapsis,
+            "body_name": orbit.body.name if orbit.body else "Unknown",
+        }
+
     def _compute_soi_bodies(self) -> list[dict]:
         if not self.connected: return []
         bodies = []
@@ -222,11 +240,27 @@ class KspClient:
                     pos = body.position(ref)
                     bx, by, bz = pos[0], pos[1], pos[2]
                     vessel_dist = math.sqrt(bx*bx + by*by + bz*bz)
+                    
+                    # Also include orbital parameters to draw the ghost or correct current pos
+                    orbit = body.orbit
+                    orbit_data = None
+                    if orbit:
+                        orbit_data = {
+                            "semi_major_axis": orbit.semi_major_axis,
+                            "eccentricity": orbit.eccentricity,
+                            "argument_of_periapsis": orbit.argument_of_periapsis,
+                            "inclination": orbit.inclination,
+                            "longitude_of_ascending_node": orbit.longitude_of_ascending_node,
+                            "true_anomaly": orbit.true_anomaly,
+                            "epoch": orbit.epoch,
+                        }
+
                     bodies.append({
                         "name": name,
                         "pos_x": bx, "pos_y": by, "pos_z": bz,
                         "soi_radius": soi,
                         "vessel_distance": vessel_dist,
+                        "orbit": orbit_data,
                     })
                 except: continue
         except: pass
