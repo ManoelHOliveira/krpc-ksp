@@ -134,22 +134,38 @@ async def try_connect_loop():
                 logger.warning(f"Connect error: {ex}")
         await asyncio.sleep(2)
 
+import signal
+
 async def main():
     port = 8765
-    # Listen on 0.0.0.0 to allow connections from any interface (useful for some WSL/Docker/Network setups)
-    # and to ensure both 127.0.0.1 and localhost work.
     logger.info(f"Starting WebSocket server on ws://0.0.0.0:{port}")
 
+    # Listen for termination signals to close connections cleanly
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Future()
+
+    def signal_handler():
+        logger.info("Shutdown signal received, cleaning up...")
+        ksp.disconnect()
+        stop_event.set_result(None)
+
+    # For Windows compatibility (signal handlers can be tricky in asyncio)
+    # This will at least try to disconnect ksp when the script is about to end
+    
     asyncio.create_task(try_connect_loop())
 
     try:
         async with websockets.serve(handler, "0.0.0.0", port):
-            await asyncio.Future()
+            await asyncio.Future() # Keep running until manually stopped
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
+    finally:
+        logger.info("Cleaning up kRPC before exit...")
+        ksp.disconnect()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
+        ksp.disconnect()
