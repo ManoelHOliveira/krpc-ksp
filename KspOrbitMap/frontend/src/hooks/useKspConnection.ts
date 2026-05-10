@@ -24,31 +24,39 @@ export function useKspConnection() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("Connected to KSP bridge server at ws://127.0.0.1:8765");
+        console.log("%c[WS] Connected to KSP bridge server at ws://127.0.0.1:8765", "color: #4f6; font-weight: bold");
         send({ type: "get_body_names" });
       };
 
       ws.onmessage = (ev) => {
         try {
           const msg: WsMessage = JSON.parse(ev.data);
+          // Only log a snippet or specific types to avoid flooding, or log a heartbeat
           if ("type" in msg && msg.type === "body_names") {
-            setBodyNames(msg.names);
-            return;
+             console.log("[WS] Received body names:", msg.names);
+             setBodyNames(msg.names);
+             return;
           }
+          
+          // Log heartbeat every 5 seconds if connected
+          if (msg.server_time && Math.floor(msg.server_time) % 5 === 0) {
+            // console.debug("[WS] Telemetry heartbeat received", msg.vessel_name);
+          }
+
           setData(msg as ServerData);
         } catch (err) {
-          console.error("Failed to parse message from server:", err);
+          console.error("%c[WS] Failed to parse message from server:", "color: #f46", err, ev.data);
         }
       };
 
       ws.onclose = (ev) => {
-        console.warn(`Connection closed (code: ${ev.code}, reason: ${ev.reason}), retrying in 2s...`);
+        console.warn(`%c[WS] Connection closed (code: ${ev.code}, reason: ${ev.reason || "none"}), retrying in 2s...`, "color: #fb0");
         setData(prev => ({ ...prev, connected: false }));
         reconnectTimer = setTimeout(connect, 2000);
       };
 
       ws.onerror = (err) => {
-        console.error("WebSocket error:", err);
+        console.error("%c[WS] WebSocket error:", "color: #f46", err);
         ws?.close();
       };
     }

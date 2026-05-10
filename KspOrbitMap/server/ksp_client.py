@@ -52,7 +52,14 @@ class KspClient:
 
     @property
     def connected(self) -> bool:
-        return self.conn is not None
+        if self.conn is None: return False
+        try:
+            # Quick status check to verify connection is alive
+            _ = self.conn.krpc.get_status()
+            return True
+        except:
+            self.conn = None # Set to None to signal disconnection
+            return False
 
     def set_target(self, name: Optional[str]):
         if not self.conn: return
@@ -117,9 +124,9 @@ class KspClient:
             }
             return result
         except Exception as ex:
-            import traceback
-            traceback.print_exc()
-            return {"connected": True, "error": str(ex)}
+            # Force disconnection on error to trigger reconnect loop
+            self.conn = None
+            return {"connected": False, "error": f"Connection lost: {str(ex)}"}
 
     def _get_encounter_data(self) -> Optional[dict]:
         if not self.connected: return None

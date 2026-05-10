@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import websockets
 from ksp_client import KspClient
 
@@ -10,20 +11,56 @@ logger = logging.getLogger("ksp-server")
 ksp = KspClient()
 connected_once = False
 
+import time
+
+def sanitize_for_json(obj):
+    """Replaces Infinity, -Infinity, and NaN with JSON-compliant values."""
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isinf(obj) or math.isnan(obj):
+            return None # JSON doesn't support Inf/NaN
+        return obj
+    return obj
+
 async def send_loop(ws):
     global connected_once
+    logger.info("Starting telemetry send loop")
     while True:
         try:
+            # Get data from KSP
             data = ksp.get_data()
+            
+            # Add a timestamp to detect stale data in frontend
+            data["server_time"] = time.time()
+
             if not connected_once and data.get("connected"):
                 connected_once = True
-                logger.info("Connected to kRPC")
-            elif not data.get("connected"):
-                pass
-            await ws.send(json.dumps(data))
-        except Exception as ex:
-            logger.warning(f"Send error: {ex}")
+                logger.info("First successful data broadcast to client")
+            
+            # Robust JSON conversion handling NaN/Infinity
+            try:
+                # Use a custom encoder or simple replacement to make it JSON compliant
+                # Standard json.dumps with allow_nan=False would raise an error, 
+                # but we want to just replace them.
+                payload = json.dumps(data, allow_nan=False)
+            except ValueError:
+                # If it failed due to NaN/Inf, sanitize it manually
+                sanitized = sanitize_for_json(data)
+                payload = json.dumps(sanitized)
+            except Exception as e:
+                logger.error(f"JSON serialization error: {e}")
+                payload = json.dumps({"connected": ksp.connected, "error": "Serialization error", "server_time": time.time()})
+
+            await ws.send(payload)
+        except websockets.exceptions.ConnectionClosed:
+            logger.info("WebSocket connection closed during send")
             break
+        except Exception as ex:
+            logger.warning(f"Unexpected error in send_loop: {ex}")
+            # Don't break, try to recover in next tick
         await asyncio.sleep(0.2)
 
 async def handle_cmd(ws, raw: str):
@@ -56,6 +93,9 @@ async def handle_cmd(ws, raw: str):
             await ws.send(json.dumps({"type": "body_names", "names": names}))
     except Exception as ex:
         logger.warning(f"Cmd error: {ex}")
+        # If a command fails, verify connection health
+        if not ksp.connected:
+            logger.info("Command failed due to connection loss, triggering reconnect")
 
 async def handler(ws):
     global connected_once

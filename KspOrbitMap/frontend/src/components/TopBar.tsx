@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { ServerData } from "../types";
 
 interface Props {
@@ -8,6 +8,17 @@ interface Props {
 }
 
 export default function TopBar({ data, bodyNames, send }: Props) {
+  const [isStale, setIsStale] = useState(false);
+
+  useEffect(() => {
+    if (!data.server_time) return;
+    setIsStale(false);
+    
+    // If we don't get new data for 2 seconds, consider it stale
+    const timer = setTimeout(() => setIsStale(true), 2000);
+    return () => clearTimeout(timer);
+  }, [data.server_time]);
+
   const sorted = useMemo(() => {
     if (!data.soi_bodies || data.soi_bodies.length === 0) return bodyNames;
     const order = data.soi_bodies.map(sb => sb.name);
@@ -31,8 +42,18 @@ export default function TopBar({ data, bodyNames, send }: Props) {
           fontFamily: "Orbitron, sans-serif",
           letterSpacing: 1
         }}>
-          {data.connected ? "LINK ESTABLISHED" : "NO CONNECTION"}
+          {data.connected ? (isStale ? "TELEMETRY STALLED" : "LINK ESTABLISHED") : (data.error ? "BRIDGE ERROR" : "NO CONNECTION")}
         </span>
+        {isStale && (
+          <span style={{ color: "#fb0", fontSize: 9, fontFamily: "Share Tech Mono", marginLeft: 10, animation: "blink 1s infinite" }}>
+            WARNING: DATA STALE (CHECK SERVER)
+          </span>
+        )}
+        {data.error && (
+          <span style={{ color: "#f44", fontSize: 9, fontFamily: "Share Tech Mono", marginLeft: 10 }}>
+            ERR: {data.error}
+          </span>
+        )}
       </div>
 
       {data.connected && (
